@@ -299,45 +299,46 @@ export class VertexAIVisionPlatformService {
 
   private async runObjectDetection(imageBuffer: Buffer): Promise<any[]> {
     try {
-      const headers = await this.getAuthHeaders();
-      
-      // Use Google Cloud Vision API for object localization with bounding boxes
+      // Use Gemini 2.5 Flash for object detection with bounding boxes
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (!geminiApiKey) {
+        throw new Error('GEMINI_API_KEY environment variable is required');
+      }
+
       const request = {
-        requests: [{
-          image: {
-            content: imageBuffer.toString('base64')
-          },
-          features: [
+        contents: [{
+          parts: [
             {
-              type: 'OBJECT_LOCALIZATION',
-              maxResults: 20
+              text: "Detect objects in this image and provide bounding box coordinates. Return JSON format: [{\"object\": \"object_name\", \"confidence\": 0.95, \"box\": [y_min, x_min, y_max, x_max]}]. Use normalized 0-1000 coordinates."
             },
             {
-              type: 'LABEL_DETECTION', 
-              maxResults: 10
+              inline_data: {
+                mime_type: "image/jpeg",
+                data: imageBuffer.toString('base64')
+              }
             }
           ]
-        }]
+        }],
+        generationConfig: {
+          response_mime_type: "application/json"
+        }
       };
-      
-      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
-      const response = await fetch(endpoint, {
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request)
       });
-      
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Vision API response: ${errorText}`);
-        throw new Error(`Object detection failed: ${response.statusText}`);
+        throw new Error(`Gemini API failed: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      return this.parseVisionAPIResponse(data);
+      return this.parseGeminiObjectDetections(data);
       
     } catch (error) {
-      console.error('Vertex AI object detection error:', error);
+      console.error('Gemini object detection error:', error);
       return [];
     }
   }
