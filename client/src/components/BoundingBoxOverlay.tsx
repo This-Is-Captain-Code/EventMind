@@ -65,39 +65,69 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
   const renderBoundingBox = (detection: Detection, index: number) => {
     let bbox = detection.bbox;
     
-    // Handle different coordinate systems
+    // Handle different coordinate systems from Google Cloud Vision API
     if (!bbox && detection.boundingPoly) {
       if (detection.boundingPoly.normalizedVertices) {
-        // Normalized coordinates (0-1)
+        // Normalized coordinates (0-1) - most common from Vision API
         const vertices = detection.boundingPoly.normalizedVertices;
+        const minX = Math.min(...vertices.map(v => v.x));
+        const minY = Math.min(...vertices.map(v => v.y));
+        const maxX = Math.max(...vertices.map(v => v.x));
+        const maxY = Math.max(...vertices.map(v => v.y));
+        
         bbox = {
-          left: vertices[0].x,
-          top: vertices[0].y,
-          right: vertices[2].x,
-          bottom: vertices[2].y
+          left: minX,
+          top: minY,
+          right: maxX,
+          bottom: maxY
         };
       } else if (detection.boundingPoly.vertices) {
-        // Pixel coordinates
+        // Pixel coordinates - convert to normalized
         const vertices = detection.boundingPoly.vertices;
+        const minX = Math.min(...vertices.map(v => v.x));
+        const minY = Math.min(...vertices.map(v => v.y));
+        const maxX = Math.max(...vertices.map(v => v.x));
+        const maxY = Math.max(...vertices.map(v => v.y));
+        
         bbox = {
-          left: vertices[0].x / videoWidth,
-          top: vertices[0].y / videoHeight,
-          right: vertices[2].x / videoWidth,
-          bottom: vertices[2].y / videoHeight
+          left: minX / videoWidth,
+          top: minY / videoHeight,
+          right: maxX / videoWidth,
+          bottom: maxY / videoHeight
         };
       }
     }
 
     if (!bbox) return null;
 
-    // Convert normalized coordinates to pixel coordinates
-    const left = bbox.left * videoWidth;
-    const top = bbox.top * videoHeight;
-    const width = (bbox.right - bbox.left) * videoWidth;
-    const height = (bbox.bottom - bbox.top) * videoHeight;
+    // Ensure coordinates are within valid range (0-1 for normalized)
+    bbox = {
+      left: Math.max(0, Math.min(1, bbox.left)),
+      top: Math.max(0, Math.min(1, bbox.top)),
+      right: Math.max(0, Math.min(1, bbox.right)),
+      bottom: Math.max(0, Math.min(1, bbox.bottom))
+    };
+
+    // Convert normalized coordinates to percentage for CSS positioning
+    const left = bbox.left * 100;
+    const top = bbox.top * 100;
+    const width = (bbox.right - bbox.left) * 100;
+    const height = (bbox.bottom - bbox.top) * 100;
 
     // Skip invalid bounding boxes
-    if (width <= 0 || height <= 0) return null;
+    if (width <= 0 || height <= 0) {
+      console.log('Invalid bbox dimensions:', { width, height, bbox });
+      return null;
+    }
+
+    // Debug logging for coordinate alignment
+    console.log(`Detection ${index}:`, {
+      type: detection.type,
+      label: detection.label,
+      originalBbox: detection.bbox,
+      normalizedBbox: bbox,
+      positionPercent: { left, top, width, height }
+    });
 
     const colorClass = getColorForType(detection.type);
     const badgeColor = getBadgeColorForType(detection.type);
@@ -107,10 +137,10 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
         key={`${detection.type}-${index}`}
         className={`absolute border-2 ${colorClass} pointer-events-none`}
         style={{
-          left: `${left}px`,
-          top: `${top}px`,
-          width: `${width}px`,
-          height: `${height}px`,
+          left: `${left}%`,
+          top: `${top}%`,
+          width: `${width}%`,
+          height: `${height}%`,
         }}
       >
         {/* Label badge */}
@@ -160,7 +190,7 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
   return (
     <div 
       className={`absolute inset-0 pointer-events-none ${className}`}
-      style={{ width: videoWidth, height: videoHeight }}
+      style={{ width: '100%', height: '100%' }}
     >
       {detectionsWithBboxes.map((detection, index) => renderBoundingBox(detection, index))}
       
