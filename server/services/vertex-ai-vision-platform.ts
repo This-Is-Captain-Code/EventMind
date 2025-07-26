@@ -940,14 +940,36 @@ export class VertexAIVisionPlatformService {
       }
     });
 
-    // Add occupancy summary
+    // Enhanced occupancy summary with smart density thresholds and visual indicators
+    let densityLevel = "LOW";
+    let densityColor = "#22c55e"; // Green
+    let densityDescription = "Safe occupancy level";
+    
+    if (personCount >= 15) {
+      densityLevel = "HIGH";
+      densityColor = "#ef4444"; // Red
+      densityDescription = "High density - Monitor closely";
+    } else if (personCount >= 8) {
+      densityLevel = "MEDIUM";
+      densityColor = "#f97316"; // Orange
+      densityDescription = "Moderate density - Watch for changes";
+    }
+
     const occupancyData = [
       {
         type: "OCCUPANCY_COUNT",
-        label: `Occupancy: ${personCount} people`,
+        label: `${personCount} People - ${densityLevel} Density`,
         confidence: 0.9,
         count: personCount,
-        density: personCount > 10 ? "High" : personCount > 5 ? "Medium" : "Low",
+        density: densityLevel,
+        densityColor: densityColor,
+        densityDescription: densityDescription,
+        bbox: {
+          left: 0.02, // Top-left corner positioning
+          top: 0.02,
+          right: 0.35,
+          bottom: 0.15
+        }
       },
     ];
 
