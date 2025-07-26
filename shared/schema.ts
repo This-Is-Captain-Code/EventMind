@@ -44,19 +44,9 @@ export const safetyIncidents = pgTable("safety_incidents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   incidentType: text("incident_type").notNull(), // DENSITY_ALERT, FALLING_PERSON, LYING_PERSON, SURGE_DETECTION
-  severity: text("severity").notNull(), // HIGH, MEDIUM
+  severity: text("severity").notNull(), // HIGH, MEDIUM, LOW
   confidence: real("confidence").notNull(),
-  personCount: text("person_count"),
-  streamSource: text("stream_source"),
-  applicationId: text("application_id"),
-  streamId: text("stream_id"),
-  frameId: text("frame_id"),
-  analysisId: text("analysis_id"),
-  detectionData: jsonb("detection_data"),
-  safetyAnalysis: jsonb("safety_analysis"),
-  acknowledged: text("acknowledged").default("false"),
-  resolvedAt: timestamp("resolved_at"),
-  notes: text("notes"),
+  detectionData: jsonb("detection_data").notNull(),
 });
 
 // Insert schemas

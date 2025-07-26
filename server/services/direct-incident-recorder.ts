@@ -28,22 +28,17 @@ export class DirectIncidentRecorder {
         incidentType: 'DENSITY_ALERT',
         severity: densityLevel,
         confidence: 0.9,
-        personCount: personCount.toString(),
-        streamSource: 'default-camera',
-        applicationId: applicationId,
-        streamId: streamId,
-        frameId: frameId,
-        analysisId: analysisId,
         detectionData: {
-          personCount,
-          densityLevel,
           alertType: 'OCCUPANCY_DENSITY',
-          threshold: densityLevel === 'HIGH' ? 10 : 5
-        },
-        safetyAnalysis: null,
-        acknowledged: 'false',
-        resolvedAt: null,
-        notes: null
+          personCount: personCount,
+          densityLevel: densityLevel,
+          threshold: densityLevel === 'HIGH' ? 10 : 5,
+          streamSource: 'default-camera',
+          applicationId: applicationId,
+          streamId: streamId,
+          frameId: frameId,
+          analysisId: analysisId
+        }
       };
 
       const [newIncident] = await db
@@ -89,17 +84,15 @@ export class DirectIncidentRecorder {
             incidentType: 'SURGE_DETECTION',
             severity: surge.severity,
             confidence: 0.8,
-            personCount: null,
-            streamSource: 'default-camera',
-            applicationId: applicationId,
-            streamId: streamId,
-            frameId: frameId,
-            analysisId: analysisId,
-            detectionData: surge,
-            safetyAnalysis: safetyAnalysis,
-            acknowledged: 'false',
-            resolvedAt: null,
-            notes: null
+            detectionData: {
+              ...surge,
+              streamSource: 'default-camera',
+              applicationId: applicationId,
+              streamId: streamId,
+              frameId: frameId,
+              analysisId: analysisId,
+              safetyAnalysis: safetyAnalysis
+            }
           });
         }
       }
@@ -110,17 +103,15 @@ export class DirectIncidentRecorder {
           incidentType: 'FALLING_PERSON',
           severity: 'HIGH',
           confidence: 0.9,
-          personCount: null,
-          streamSource: 'default-camera',
-          applicationId: applicationId,
-          streamId: streamId,
-          frameId: frameId,
-          analysisId: analysisId,
-          detectionData: fallingPerson,
-          safetyAnalysis: safetyAnalysis,
-          acknowledged: 'false',
-          resolvedAt: null,
-          notes: null
+          detectionData: {
+            ...fallingPerson,
+            streamSource: 'default-camera',
+            applicationId: applicationId,
+            streamId: streamId,
+            frameId: frameId,
+            analysisId: analysisId,
+            safetyAnalysis: safetyAnalysis
+          }
         });
       }
 
@@ -130,17 +121,15 @@ export class DirectIncidentRecorder {
           incidentType: 'LYING_PERSON',
           severity: 'MEDIUM',
           confidence: 0.8,
-          personCount: null,
-          streamSource: 'default-camera',
-          applicationId: applicationId,
-          streamId: streamId,
-          frameId: frameId,
-          analysisId: analysisId,
-          detectionData: lyingPerson,
-          safetyAnalysis: safetyAnalysis,
-          acknowledged: 'false',
-          resolvedAt: null,
-          notes: null
+          detectionData: {
+            ...lyingPerson,
+            streamSource: 'default-camera',
+            applicationId: applicationId,
+            streamId: streamId,
+            frameId: frameId,
+            analysisId: analysisId,
+            safetyAnalysis: safetyAnalysis
+          }
         });
       }
 
