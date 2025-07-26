@@ -168,8 +168,13 @@ export default function VertexAIPlatform() {
   };
 
   const handleProcessFrame = async () => {
-    if (!selectedApplication || !selectedStream || !isStreaming) {
-      toast({ title: "Error", description: "Please select application, stream and start camera", variant: "destructive" });
+    if (!isStreaming) {
+      toast({ title: "Error", description: "Please start camera first", variant: "destructive" });
+      return;
+    }
+    
+    if (!selectedApplication) {
+      toast({ title: "Error", description: "Please select an application first (create one in Setup tab)", variant: "destructive" });
       return;
     }
 
@@ -531,7 +536,7 @@ export default function VertexAIPlatform() {
 
                   <div className="grid grid-cols-2 gap-2">
                     <Button
-                      onClick={startCamera}
+                      onClick={() => startCamera()}
                       disabled={isStreaming || cameraLoading}
                       size="sm"
                       className="bg-green-600 hover:bg-green-700"
@@ -578,11 +583,17 @@ export default function VertexAIPlatform() {
                         <SelectValue placeholder="Select app" />
                       </SelectTrigger>
                       <SelectContent>
-                        {applicationsArray.map((app: any) => (
-                          <SelectItem key={app.name} value={app.name}>
-                            {app.displayName}
+                        {applicationsArray.length > 0 ? (
+                          applicationsArray.map((app: any) => (
+                            <SelectItem key={app.name} value={app.name || app.displayName || 'unknown'}>
+                              {app.displayName || app.name || 'Unknown Application'}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-apps" disabled>
+                            No applications found
                           </SelectItem>
-                        ))}
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

@@ -144,7 +144,7 @@ export function useCamera() {
     canvas.height = video.videoHeight;
     context.drawImage(video, 0, 0);
 
-    return canvas.toDataURL('image/jpeg', 0.8);
+    return canvas.toDataURL('image/jpeg', 0.5);
   }, [state.isActive]);
 
   // Change camera device
