@@ -46,8 +46,8 @@ export const safetyIncidents = pgTable("safety_incidents", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   
   // Incident classification
-  incidentType: text("incident_type").notNull(), // 'DENSITY_ALERT', 'FALLING_PERSON', 'LYING_PERSON', 'SURGE_DETECTION', 'FIRE_SMOKE_ALERT'
-  severity: text("severity").notNull(), // 'CRITICAL', 'HIGH', 'MEDIUM'
+  incidentType: text("incident_type").notNull(), // 'DENSITY_ALERT', 'FALLING_PERSON', 'LYING_PERSON', 'SURGE_DETECTION'
+  severity: text("severity").notNull(), // 'HIGH', 'MEDIUM'
   
   // Detection details
   confidence: real("confidence").notNull(), // Detection confidence score

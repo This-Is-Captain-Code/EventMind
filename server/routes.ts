@@ -286,9 +286,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get incidents by severity
   app.get("/api/incidents/severity/:severity", async (req, res) => {
     try {
-      const severity = req.params.severity.toUpperCase() as 'CRITICAL' | 'HIGH' | 'MEDIUM';
-      if (severity !== 'CRITICAL' && severity !== 'HIGH' && severity !== 'MEDIUM') {
-        return res.status(400).json({ error: 'Severity must be CRITICAL, HIGH or MEDIUM' });
+      const severity = req.params.severity.toUpperCase() as 'HIGH' | 'MEDIUM';
+      if (severity !== 'HIGH' && severity !== 'MEDIUM') {
+        return res.status(400).json({ error: 'Severity must be HIGH or MEDIUM' });
       }
       
       const limit = parseInt(req.query.limit as string) || 25;

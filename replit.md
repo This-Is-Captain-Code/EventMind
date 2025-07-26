@@ -109,26 +109,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes: Latest modifications with dates
 
-### July 26, 2025 - Fire and Smoke Detection Integration with Complete Incident Database System
-
-#### 🔥 Advanced Fire and Smoke Detection Implementation
-- **Specialized fire/smoke detection model** - Dedicated FIRE_SMOKE_DETECTION model using Google Cloud Vision API with enhanced keyword filtering
-- **Comprehensive detection keywords** - Monitors for fire, flame, smoke, combustion, explosion, ignition, wildfire, torch, ash, ember, fumes, vapor
-- **Multi-severity classification** - CRITICAL (fire/flames), HIGH (smoke/burning), MEDIUM (cigarettes/vapor) severity levels
-- **Emergency-level alerts** - Critical incidents automatically flagged for immediate response
-- **Enhanced object filtering** - Focuses exclusively on fire/smoke objects, filtering out all other detections for safety-critical monitoring
-- **Real-time incident recording** - All fire/smoke detections automatically saved to database with complete metadata and confidence scores
-- **Production-ready detection** - Lowered confidence thresholds and increased detection limits for maximum safety coverage
-
-#### Complete Safety Incident Database Integration  
-- **Enhanced database schema** - Updated to support FIRE_SMOKE_ALERT incident type with CRITICAL/HIGH/MEDIUM severity levels
-- **Automatic CRITICAL incident recording** - Fire/flame detections immediately recorded as CRITICAL severity incidents
-- **Multi-severity tracking** - Database now tracks CRITICAL, HIGH, and MEDIUM incidents with enhanced statistics
-- **Fire/smoke incident API** - Complete REST endpoints support filtering by CRITICAL severity for emergency response
-- **Real-time safety statistics** - Updated incident stats include fire/smoke alerts with emergency-level classification
-- **Professional incident workflow** - Fire/smoke incidents include emergency level, object type, confidence, and precise location data
-
-### Previous: RTMP Multi-Device Streaming Implementation & Enhanced Occupancy Density Display
+### July 26, 2025 - RTMP Multi-Device Streaming Implementation & Enhanced Occupancy Density Display
 - **Implemented Advanced Safety Analyzer** - Multi-frame analysis system for density surge detection and falling/lying person detection
 - **Real-time person tracking** - Sophisticated tracking system that follows individuals across multiple frames using position correlation
 - **Density surge detection** - 8x8 grid-based density analysis that detects crowd surges with configurable thresholds and severity levels

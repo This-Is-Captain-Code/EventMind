@@ -6,11 +6,11 @@ export class IncidentTracker {
   
   /**
    * Record a safety incident to the database
-   * Handles all types: DENSITY_ALERT, FALLING_PERSON, LYING_PERSON, SURGE_DETECTION, FIRE_SMOKE_ALERT
+   * Handles all types: DENSITY_ALERT, FALLING_PERSON, LYING_PERSON, SURGE_DETECTION
    */
   async recordIncident(incident: {
-    incidentType: 'DENSITY_ALERT' | 'FALLING_PERSON' | 'LYING_PERSON' | 'SURGE_DETECTION' | 'FIRE_SMOKE_ALERT';
-    severity: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+    incidentType: 'DENSITY_ALERT' | 'FALLING_PERSON' | 'LYING_PERSON' | 'SURGE_DETECTION';
+    severity: 'HIGH' | 'MEDIUM';
     confidence: number;
     personCount?: number;
     streamSource?: string;
@@ -81,45 +81,6 @@ export class IncidentTracker {
       });
     }
     return null;
-  }
-
-  /**
-   * 🔥 Process fire/smoke detections and record CRITICAL/HIGH/MEDIUM incidents
-   */
-  async processFireSmokeAlert(data: {
-    detections: any[];
-    frameId?: string;
-    analysisId?: string;
-  }): Promise<string[]> {
-    const recordedIncidents: string[] = [];
-
-    for (const detection of data.detections) {
-      if (detection.type === 'FIRE_SMOKE_DETECTION' && 
-          (detection.severity === 'CRITICAL' || detection.severity === 'HIGH' || detection.severity === 'MEDIUM')) {
-        
-        const incidentId = await this.recordIncident({
-          incidentType: 'FIRE_SMOKE_ALERT',
-          severity: detection.severity,
-          confidence: detection.confidence,
-          personCount: 0, // Fire/smoke doesn't involve person count
-          frameId: data.frameId,
-          analysisId: data.analysisId,
-          detectionData: detection,
-          safetyAnalysis: {
-            objectType: detection.label,
-            emergencyLevel: detection.emergencyLevel,
-            confidence: detection.confidence,
-            location: detection.bbox,
-            alertTrigger: `Fire/Smoke detected: ${detection.label} with ${detection.severity} severity`
-          }
-        });
-        
-        recordedIncidents.push(incidentId);
-        console.log(`🔥 FIRE/SMOKE INCIDENT RECORDED: ${detection.label} - ${detection.severity} severity (ID: ${incidentId})`);
-      }
-    }
-
-    return recordedIncidents;
   }
 
   /**
@@ -219,7 +180,7 @@ export class IncidentTracker {
   /**
    * Get incidents by severity
    */
-  async getIncidentsBySeverity(severity: 'CRITICAL' | 'HIGH' | 'MEDIUM', limit: number = 25): Promise<any[]> {
+  async getIncidentsBySeverity(severity: 'HIGH' | 'MEDIUM', limit: number = 25): Promise<any[]> {
     try {
       const incidents = await db
         .select()
@@ -271,7 +232,6 @@ export class IncidentTracker {
 
       const stats = {
         totalIncidents: recentIncidents.length,
-        criticalSeverity: recentIncidents.filter(i => i.severity === 'CRITICAL').length,
         highSeverity: recentIncidents.filter(i => i.severity === 'HIGH').length,
         mediumSeverity: recentIncidents.filter(i => i.severity === 'MEDIUM').length,
         byType: {
@@ -279,7 +239,6 @@ export class IncidentTracker {
           FALLING_PERSON: recentIncidents.filter(i => i.incidentType === 'FALLING_PERSON').length,
           LYING_PERSON: recentIncidents.filter(i => i.incidentType === 'LYING_PERSON').length,
           SURGE_DETECTION: recentIncidents.filter(i => i.incidentType === 'SURGE_DETECTION').length,
-          FIRE_SMOKE_ALERT: recentIncidents.filter(i => i.incidentType === 'FIRE_SMOKE_ALERT').length,
         },
         acknowledged: recentIncidents.filter(i => i.acknowledged === "true").length,
         unacknowledged: recentIncidents.filter(i => i.acknowledged === "false").length

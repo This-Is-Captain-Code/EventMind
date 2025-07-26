@@ -281,7 +281,7 @@ export class VertexAIVisionPlatformService {
 
       const safetyAnalysis = await this.safetyAnalyzer.processFrame(frameData);
 
-      // 🚨 INCIDENT TRACKING: Record CRITICAL/HIGH/MEDIUM incidents to database
+      // 🚨 INCIDENT TRACKING: Record HIGH and MEDIUM incidents to database
       try {
         const recordedIncidents: string[] = [];
 
@@ -297,17 +297,6 @@ export class VertexAIVisionPlatformService {
             detectionData: occupancyDetection
           });
           if (incidentId) recordedIncidents.push(incidentId);
-        }
-
-        // 🔥 Track fire and smoke detections
-        const fireSmokeDetections = detections.filter(d => d.type === 'FIRE_SMOKE_DETECTION');
-        if (fireSmokeDetections.length > 0) {
-          const fireIncidents = await incidentTracker.processFireSmokeAlert({
-            detections: fireSmokeDetections,
-            frameId: frameData.frameId,
-            analysisId: Date.now().toString()
-          });
-          recordedIncidents.push(...fireIncidents);
         }
 
         // Track safety analysis incidents (falling, lying, surges)
@@ -414,11 +403,6 @@ export class VertexAIVisionPlatformService {
           case "LOGO_DETECTION":
             const logoData = await this.runLogoDetection(imageBuffer);
             detections.push(...logoData);
-            break;
-
-          case "FIRE_SMOKE_DETECTION":
-            const fireSmoke = await this.runFireSmokeDetection(imageBuffer);
-            detections.push(...fireSmoke);
             break;
 
           default:
@@ -934,92 +918,6 @@ export class VertexAIVisionPlatformService {
       VERY_LIKELY: 0.9,
     };
     return scores[likelihood as keyof typeof scores] || 0.5;
-  }
-
-  // 🔥 FIRE AND SMOKE DETECTION - Critical Safety Feature
-  private async runFireSmokeDetection(imageBuffer: Buffer): Promise<any[]> {
-    try {
-      const headers = await this.getAuthHeaders();
-
-      // Use Google Cloud Vision API for comprehensive object detection focused on fire/smoke
-      const request = {
-        requests: [
-          {
-            image: {
-              content: imageBuffer.toString("base64"),
-            },
-            features: [
-              {
-                type: "OBJECT_LOCALIZATION", 
-                maxResults: 50, // Higher limit to catch multiple fire/smoke instances
-              },
-            ],
-          },
-        ],
-      };
-
-      const endpoint = "https://vision.googleapis.com/v1/images:annotate";
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Fire/Smoke Detection API error: ${errorText}`);
-        return [];
-      }
-
-      const data = await response.json();
-
-      // Parse and filter ONLY fire and smoke detections
-      const allDetections = this.parseVisionAPIObjectResponse(data);
-      
-      // Enhanced fire/smoke keywords for comprehensive detection
-      const fireSmokekeywords = [
-        'fire', 'flame', 'flames', 'smoke', 'smoking', 'burn', 'burning',
-        'blaze', 'combustion', 'ignition', 'wildfire', 'campfire', 
-        'bonfire', 'torch', 'lighter', 'match', 'cigarette', 'cigar',
-        'ash', 'ember', 'smoldering', 'soot', 'fumes', 'vapor',
-        'heat', 'thermal', 'explosion', 'blast'
-      ];
-
-      const fireSmoke = allDetections.filter(detection => {
-        const label = detection.label.toLowerCase();
-        return fireSmokekeywords.some(keyword => 
-          label.includes(keyword) || 
-          keyword.includes(label)
-        );
-      }).map(detection => ({
-        ...detection,
-        type: "FIRE_SMOKE_DETECTION",
-        severity: this.classifyFireSmokeSeverity(detection.label, detection.confidence),
-        emergencyLevel: detection.confidence > 0.7 ? 'CRITICAL' : 'HIGH'
-      }));
-
-      console.log(`🔥 Fire/Smoke Detection: Found ${fireSmoke.length} potential fire/smoke objects`);
-
-      return fireSmoke;
-    } catch (error) {
-      console.error("Error in fire/smoke detection:", error);
-      return [];
-    }
-  }
-
-  private classifyFireSmokeSeverity(label: string, confidence: number): 'CRITICAL' | 'HIGH' | 'MEDIUM' {
-    const criticalKeywords = ['fire', 'flame', 'flames', 'explosion', 'blast', 'wildfire'];
-    const highKeywords = ['smoke', 'burn', 'burning', 'blaze', 'combustion'];
-    
-    const labelLower = label.toLowerCase();
-    
-    if (criticalKeywords.some(keyword => labelLower.includes(keyword))) {
-      return confidence > 0.6 ? 'CRITICAL' : 'HIGH';
-    } else if (highKeywords.some(keyword => labelLower.includes(keyword))) {
-      return confidence > 0.7 ? 'HIGH' : 'MEDIUM';
-    }
-    
-    return 'MEDIUM';
   }
 
   private parseFaceDetections(data: any): any[] {
