@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { VertexAIVisionPlatformService } from "./services/vertex-ai-vision-platform";
 import { incidentTracker } from "./services/incident-tracker";
+import { directIncidentRecorder } from "./services/direct-incident-recorder";
 
 import { z } from "zod";
 
@@ -153,28 +154,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         confidence: analysis.confidence
       });
 
-      // **AUTOMATIC INCIDENT TRACKING**
-      // Check for high-density crowd situations and log as incidents
+      // **DIRECT INCIDENT RECORDING** (gRPC-style database insertion)
+      // Record density alerts immediately for HIGH and MEDIUM density
       if (analysis.occupancyDensity && analysis.occupancyDensity.personCount > 0) {
         const densityLevel = analysis.occupancyDensity.densityLevel;
         const personCount = analysis.occupancyDensity.personCount;
         
-        // Log density alerts for HIGH and MEDIUM severity
-        if (densityLevel === 'HIGH' || densityLevel === 'MEDIUM') {
-          await incidentTracker.processDensityAlert(
-            personCount,
-            densityLevel,
-            analysis.frameId || Date.now().toString(),
-            storedAnalysis.id,
-            validatedData.applicationId,
-            validatedData.streamId
-          );
-        }
+        // Direct database recording for density incidents
+        await directIncidentRecorder.recordDensityAlert(
+          personCount,
+          densityLevel,
+          analysis.frameId || Date.now().toString(),
+          storedAnalysis.id,
+          validatedData.applicationId,
+          validatedData.streamId
+        );
       }
 
-      // Process safety analysis results for incidents (density surges, falling persons, lying persons)
+      // Record safety analysis incidents directly to database
       if (analysis.safetyAnalysis) {
-        await incidentTracker.processSafetyAnalysis(
+        await directIncidentRecorder.recordSafetyAnalysis(
           analysis.safetyAnalysis,
           analysis.frameId || Date.now().toString(),
           storedAnalysis.id,

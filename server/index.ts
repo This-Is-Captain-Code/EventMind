@@ -1,6 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { incidentQueue } from "./services/incident-queue";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -38,19 +37,6 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize incident queue system
-  await incidentQueue.initialize();
-  
-  // Start incident queue consumer
-  await incidentQueue.startConsumer(async (incident) => {
-    const { incidentTracker } = await import('./services/incident-tracker');
-    if (incident.type === 'DENSITY_ALERT') {
-      await incidentTracker.recordDensityIncident(incident);
-    } else if (incident.type === 'SAFETY_ANALYSIS') {
-      await incidentTracker.recordSafetyIncident(incident);
-    }
-  });
-
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
