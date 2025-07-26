@@ -2,6 +2,7 @@ import { GoogleAuth } from "google-auth-library";
 import aiplatform from "@google-cloud/aiplatform";
 import { VideoIntelligenceServiceClient } from "@google-cloud/video-intelligence";
 import * as fs from "fs";
+import { SafetyAnalyzer } from "./safety-analyzer";
 
 export interface VisionApplication {
   name: string;
@@ -59,6 +60,7 @@ export class VertexAIVisionPlatformService {
   private videoClient: VideoIntelligenceServiceClient;
   private visionAIBaseUrl: string;
   private aiPlatformBaseUrl: string;
+  private safetyAnalyzer: SafetyAnalyzer;
 
   constructor() {
     this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || "agenticai-466913";
@@ -96,6 +98,9 @@ export class VertexAIVisionPlatformService {
     // Set up API endpoints
     this.visionAIBaseUrl = `https://visionai.googleapis.com/v1/projects/${this.projectId}/locations`;
     this.aiPlatformBaseUrl = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${this.location}`;
+    
+    // Initialize safety analyzer for real-time monitoring
+    this.safetyAnalyzer = new SafetyAnalyzer();
   }
 
   private async getAuthHeaders() {
@@ -266,6 +271,15 @@ export class VertexAIVisionPlatformService {
 
       const processingTime = Date.now() - startTime;
 
+      // Perform advanced safety analysis on the detections
+      const frameData = {
+        timestamp: Date.now(),
+        detections,
+        frameId: `frame_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      };
+
+      const safetyAnalysis = await this.safetyAnalyzer.processFrame(frameData);
+
       const analysis: VisionAnalysis = {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
@@ -277,6 +291,7 @@ export class VertexAIVisionPlatformService {
         detections,
         applicationId: data.applicationId,
         streamId: data.streamId,
+        safetyAnalysis // Add safety analysis results
       };
 
       console.log(

@@ -179,6 +179,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Real-time Safety Statistics
+  app.get("/api/safety/stats", async (req, res) => {
+    try {
+      const safetyStats = vertexAIVisionService.getSafetyStats();
+      res.json(safetyStats);
+    } catch (error) {
+      console.error('Error getting safety stats:', error);
+      res.status(500).json({ 
+        error: 'Failed to get safety statistics',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
