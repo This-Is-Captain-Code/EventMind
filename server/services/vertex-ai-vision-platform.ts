@@ -940,43 +940,14 @@ export class VertexAIVisionPlatformService {
       }
     });
 
-    // Enhanced density level calculation with color coding
-    let densityLevel = "LOW";
-    let densityColor = "#22c55e"; // Green for low
-    let densityDescription = "Safe occupancy level";
-    
-    if (personCount >= 15) {
-      densityLevel = "HIGH";
-      densityColor = "#ef4444"; // Red for high
-      densityDescription = "High density - Monitor closely";
-    } else if (personCount >= 8) {
-      densityLevel = "MEDIUM";
-      densityColor = "#f59e0b"; // Orange for medium
-      densityDescription = "Moderate density - Watch for changes";
-    }
-
-    // Add enhanced occupancy summary with visual styling
+    // Add occupancy summary
     const occupancyData = [
       {
         type: "OCCUPANCY_COUNT",
-        label: `${personCount} People • ${densityLevel} DENSITY`,
+        label: `Occupancy: ${personCount} people`,
         confidence: 0.9,
         count: personCount,
-        density: densityLevel,
-        densityColor,
-        densityDescription,
-        bbox: { left: 0.02, top: 0.02, right: 0.6, bottom: 0.12 }, // Top-left prominent display
-        displayText: `${personCount} People • ${densityLevel} DENSITY`,
-        style: {
-          backgroundColor: densityColor,
-          color: "white",
-          fontWeight: "bold",
-          padding: "10px 15px",
-          borderRadius: "8px",
-          fontSize: "16px",
-          border: `2px solid ${densityColor}`,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.2)"
-        }
+        density: personCount > 10 ? "High" : personCount > 5 ? "Medium" : "Low",
       },
     ];
 
