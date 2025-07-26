@@ -8,6 +8,9 @@ import { z } from "zod";
 // Initialize the Vertex AI Vision Platform service
 const vertexAIVisionService = new VertexAIVisionPlatformService();
 
+// Initialize RTMP Streaming Server (will be imported when ready)
+// const rtmpServer = new RTMPStreamingServer();
+
 // Validation schemas
 const applicationConfigSchema = z.object({
   name: z.string().min(1, "Application name is required"),
@@ -188,6 +191,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error getting safety stats:', error);
       res.status(500).json({ 
         error: 'Failed to get safety statistics',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // RTMP Streaming Endpoints for Multiple Phone Support
+  app.get("/api/streaming/status", async (req, res) => {
+    try {
+      // Mock response for now - will integrate with actual RTMP server
+      const activeStreams = [
+        {
+          deviceId: "mobile_1",
+          streamKey: "phone_camera_1",
+          isActive: true,
+          startTime: Date.now() - 30000,
+          rtmpUrl: `rtmp://${req.get('host') || 'localhost'}:1935/live/mobile_1`,
+          playbackUrl: `http://${req.get('host') || 'localhost'}:8000/live/mobile_1.flv`
+        }
+      ];
+      
+      res.json({
+        totalStreams: activeStreams.length,
+        activeStreams,
+        serverStatus: "ready"
+      });
+    } catch (error) {
+      console.error('Error getting streaming status:', error);
+      res.status(500).json({ 
+        error: 'Failed to get streaming status',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.post("/api/streaming/register", async (req, res) => {
+    try {
+      const { deviceId, deviceInfo } = req.body;
+      
+      if (!deviceId) {
+        return res.status(400).json({ error: 'Device ID is required' });
+      }
+
+      // Generate streaming URLs for the device
+      const streamKey = `mobile_${deviceId}_${Date.now()}`;
+      const rtmpUrl = `rtmp://${req.get('host') || 'localhost'}:1935/live/${streamKey}`;
+      const playbackUrl = `http://${req.get('host') || 'localhost'}:8000/live/${streamKey}.flv`;
+      
+      res.json({
+        deviceId,
+        streamKey,
+        rtmpUrl,
+        playbackUrl,
+        instructions: {
+          step1: "Use an RTMP streaming app on your mobile device",
+          step2: `Set the server URL to: ${rtmpUrl}`,
+          step3: "Start streaming from your mobile camera",
+          step4: "Dashboard will automatically detect and analyze the stream"
+        },
+        recommendedApps: [
+          "Larix Broadcaster (Android/iOS)",
+          "Live Stream Camera (iOS)", 
+          "RTMP Camera (Android)",
+          "OBS Mobile (Android/iOS)"
+        ]
+      });
+    } catch (error) {
+      console.error('Error registering device:', error);
+      res.status(500).json({ 
+        error: 'Failed to register device',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }

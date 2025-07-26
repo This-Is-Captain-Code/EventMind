@@ -2,129 +2,112 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useCamera } from '@/hooks/use-camera';
-import { Smartphone, Wifi, WifiOff, Camera, CameraOff } from 'lucide-react';
+import { Smartphone, Wifi, WifiOff, Video, ExternalLink, Copy, CheckCircle2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+interface StreamingConfig {
+  deviceId: string;
+  streamKey: string;
+  rtmpUrl: string;
+  playbackUrl: string;
+  instructions: {
+    step1: string;
+    step2: string;
+    step3: string;
+    step4: string;
+  };
+  recommendedApps: string[];
+}
 
 export default function MobileClient() {
-  const [isConnected, setIsConnected] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-  const [streamingInterval, setStreamingInterval] = useState<number | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const {
-    isStreaming: cameraActive,
-    startCamera,
-    stopCamera,
-    videoRef,
-    error: cameraError,
-    devices,
-    selectedDevice,
-    selectDevice,
-  } = useCamera();
+  const [deviceId, setDeviceId] = useState(() => 
+    `mobile_${Math.random().toString(36).substr(2, 9)}`
+  );
+  const [streamingConfig, setStreamingConfig] = useState<StreamingConfig | null>(null);
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  // Connect to dashboard WebSocket
-  const connectToDashboard = () => {
-    setConnectionStatus('connecting');
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/mobile`;
-    
-    wsRef.current = new WebSocket(wsUrl);
-    
-    wsRef.current.onopen = () => {
-      setIsConnected(true);
-      setConnectionStatus('connected');
-      console.log('Connected to dashboard');
-    };
-    
-    wsRef.current.onclose = () => {
-      setIsConnected(false);
-      setConnectionStatus('disconnected');
-      console.log('Disconnected from dashboard');
-    };
-    
-    wsRef.current.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setConnectionStatus('disconnected');
-    };
-  };
+  // Register device for RTMP streaming
+  const registerDevice = async () => {
+    try {
+      const response = await fetch('/api/streaming/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId,
+          deviceInfo: {
+            userAgent: navigator.userAgent,
+            screenSize: { 
+              width: window.screen.width, 
+              height: window.screen.height 
+            },
+            timestamp: new Date().toISOString()
+          }
+        })
+      });
 
-  // Disconnect from dashboard
-  const disconnectFromDashboard = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-    setIsConnected(false);
-    setConnectionStatus('disconnected');
-  };
+      if (!response.ok) {
+        throw new Error('Failed to register device');
+      }
 
-  // Capture and send frame to dashboard
-  const captureAndSendFrame = () => {
-    if (!videoRef.current || !canvasRef.current || !isConnected || !wsRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) return;
-
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Draw current video frame to canvas
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Convert to base64 and send to dashboard
-    const frameData = canvas.toDataURL('image/jpeg', 0.7);
-    
-    if (wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'video_frame',
-        data: frameData,
-        timestamp: Date.now(),
-        deviceId: selectedDevice,
-        clientInfo: {
-          userAgent: navigator.userAgent,
-          screenSize: { width: window.screen.width, height: window.screen.height }
-        }
-      }));
+      const config = await response.json();
+      setStreamingConfig(config);
+      setIsRegistered(true);
+      
+      toast({
+        title: "Device Registered",
+        description: "Your streaming URLs have been generated successfully"
+      });
+    } catch (error) {
+      toast({
+        title: "Registration Failed",
+        description: error instanceof Error ? error.message : "Failed to register device",
+        variant: "destructive"
+      });
     }
   };
 
-  // Start streaming frames to dashboard
-  const startStreaming = () => {
-    if (!cameraActive || !isConnected) return;
+  // Copy URL to clipboard
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+      setTimeout(() => setCopied(null), 2000);
+      
+      toast({
+        title: "Copied!",
+        description: `${label} copied to clipboard`
+      });
+    } catch (error) {
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy to clipboard",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Open app store links for recommended apps
+  const openAppStore = (appName: string) => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const searchQuery = encodeURIComponent(appName);
     
-    setIsStreaming(true);
-    const interval = setInterval(captureAndSendFrame, 1000); // Send frame every second
-    setStreamingInterval(interval);
+    const url = isIOS 
+      ? `https://apps.apple.com/search?term=${searchQuery}`
+      : `https://play.google.com/store/search?q=${searchQuery}`;
+    
+    window.open(url, '_blank');
   };
 
-  // Stop streaming frames
-  const stopStreaming = () => {
-    setIsStreaming(false);
-    if (streamingInterval) {
-      clearInterval(streamingInterval);
-      setStreamingInterval(null);
-    }
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (streamingInterval) clearInterval(streamingInterval);
-      if (wsRef.current) wsRef.current.close();
-    };
-  }, [streamingInterval]);
-
-  const getConnectionColor = () => {
-    switch (connectionStatus) {
-      case 'connected': return 'bg-green-600';
-      case 'connecting': return 'bg-yellow-600';
-      case 'disconnected': return 'bg-red-600';
-    }
+  // Generate a new device ID
+  const generateNewDeviceId = () => {
+    const newId = `mobile_${Math.random().toString(36).substr(2, 9)}`;
+    setDeviceId(newId);
+    setIsRegistered(false);
+    setStreamingConfig(null);
   };
 
   return (
@@ -135,145 +118,176 @@ export default function MobileClient() {
           <div className="flex items-center space-x-2">
             <Smartphone className="h-8 w-8 text-blue-600" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Mobile Client
+              Mobile RTMP Streaming
             </h1>
           </div>
-          <Badge className={`${getConnectionColor()} text-white`}>
-            {connectionStatus.toUpperCase()}
+          <Badge className={`${isRegistered ? 'bg-green-600' : 'bg-gray-600'} text-white`}>
+            {isRegistered ? 'READY' : 'NOT REGISTERED'}
           </Badge>
         </div>
         <p className="text-gray-600 dark:text-gray-400 text-sm">
-          Stream video from your mobile device to the safety monitoring dashboard
+          Professional RTMP streaming for multiple mobile devices to the safety monitoring dashboard
         </p>
       </div>
 
-      {/* Connection Controls */}
+      {/* Device Registration */}
       <Card className="p-4 mb-6">
         <h2 className="text-lg font-semibold mb-4 flex items-center">
-          {isConnected ? <Wifi className="h-5 w-5 mr-2 text-green-600" /> : <WifiOff className="h-5 w-5 mr-2 text-red-600" />}
-          Dashboard Connection
+          <Video className="h-5 w-5 mr-2 text-blue-600" />
+          Device Registration
         </h2>
         <div className="space-y-4">
-          {!isConnected ? (
+          <div>
+            <label className="block text-sm font-medium mb-2">Device ID:</label>
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={deviceId}
+                onChange={(e) => setDeviceId(e.target.value)}
+                className="flex-1 p-2 border rounded text-sm"
+                placeholder="Enter unique device ID"
+                disabled={isRegistered}
+              />
+              <Button
+                onClick={generateNewDeviceId}
+                variant="outline"
+                size="sm"
+                disabled={isRegistered}
+              >
+                Generate
+              </Button>
+            </div>
+          </div>
+
+          {!isRegistered ? (
             <Button 
-              onClick={connectToDashboard} 
-              disabled={connectionStatus === 'connecting'}
+              onClick={registerDevice} 
               className="w-full"
+              disabled={!deviceId.trim()}
             >
-              {connectionStatus === 'connecting' ? 'Connecting...' : 'Connect to Dashboard'}
+              Register Device for Streaming
             </Button>
           ) : (
-            <Button 
-              onClick={disconnectFromDashboard} 
-              variant="destructive"
-              className="w-full"
-            >
-              Disconnect from Dashboard
-            </Button>
-          )}
-        </div>
-      </Card>
-
-      {/* Camera Controls */}
-      <Card className="p-4 mb-6">
-        <h2 className="text-lg font-semibold mb-4 flex items-center">
-          {cameraActive ? <Camera className="h-5 w-5 mr-2 text-green-600" /> : <CameraOff className="h-5 w-5 mr-2 text-gray-600" />}
-          Camera Controls
-        </h2>
-        
-        {cameraError && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm">
-            Camera Error: {cameraError}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {/* Camera Device Selection */}
-          {devices.length > 1 && (
-            <div>
-              <label className="block text-sm font-medium mb-2">Select Camera:</label>
-              <select 
-                value={selectedDevice || ''} 
-                onChange={(e) => selectDevice(e.target.value)}
-                className="w-full p-2 border rounded"
+            <div className="flex space-x-2">
+              <Button 
+                onClick={generateNewDeviceId} 
+                variant="outline"
+                className="flex-1"
               >
-                {devices.map(device => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
-                  </option>
-                ))}
-              </select>
+                Reset Device
+              </Button>
             </div>
           )}
-
-          {!cameraActive ? (
-            <Button onClick={startCamera} className="w-full">
-              Start Camera
-            </Button>
-          ) : (
-            <Button onClick={stopCamera} variant="destructive" className="w-full">
-              Stop Camera
-            </Button>
-          )}
         </div>
       </Card>
 
-      {/* Video Preview */}
-      {cameraActive && (
+      {/* Streaming Configuration */}
+      {streamingConfig && (
         <Card className="p-4 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Video Preview</h2>
-          <div className="relative">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full rounded-lg bg-black"
-            />
-            <canvas ref={canvasRef} className="hidden" />
-          </div>
-        </Card>
-      )}
-
-      {/* Streaming Controls */}
-      {cameraActive && isConnected && (
-        <Card className="p-4">
-          <h2 className="text-lg font-semibold mb-4">Stream to Dashboard</h2>
+          <h2 className="text-lg font-semibold mb-4 flex items-center">
+            <CheckCircle2 className="h-5 w-5 mr-2 text-green-600" />
+            Streaming Configuration
+          </h2>
+          
           <div className="space-y-4">
-            {!isStreaming ? (
-              <Button onClick={startStreaming} className="w-full bg-green-600 hover:bg-green-700">
-                Start Streaming to Dashboard
-              </Button>
-            ) : (
-              <Button onClick={stopStreaming} variant="destructive" className="w-full">
-                Stop Streaming
-              </Button>
-            )}
-            
-            {isStreaming && (
-              <div className="text-center">
-                <Badge className="bg-green-600 text-white animate-pulse">
-                  STREAMING LIVE
-                </Badge>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                  Sending frames to dashboard for AI analysis
-                </p>
+            <div>
+              <label className="block text-sm font-medium mb-2">RTMP Stream URL:</label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={streamingConfig.rtmpUrl}
+                  readOnly
+                  className="flex-1 p-2 border rounded text-sm bg-gray-50 font-mono text-xs"
+                />
+                <Button
+                  onClick={() => copyToClipboard(streamingConfig.rtmpUrl, 'RTMP URL')}
+                  variant="outline"
+                  size="sm"
+                >
+                  {copied === 'RTMP URL' ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
               </div>
-            )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Stream Key:</label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={streamingConfig.streamKey}
+                  readOnly
+                  className="flex-1 p-2 border rounded text-sm bg-gray-50 font-mono"
+                />
+                <Button
+                  onClick={() => copyToClipboard(streamingConfig.streamKey, 'Stream Key')}
+                  variant="outline"
+                  size="sm"
+                >
+                  {copied === 'Stream Key' ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
           </div>
         </Card>
       )}
 
-      {/* Instructions */}
+      {/* Recommended Apps */}
+      {streamingConfig && (
+        <Card className="p-4 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Recommended RTMP Apps</h2>
+          <div className="space-y-3">
+            {streamingConfig.recommendedApps.map((app, index) => (
+              <div key={index} className="flex items-center justify-between p-3 border rounded">
+                <span className="font-medium">{app}</span>
+                <Button
+                  onClick={() => openAppStore(app)}
+                  variant="outline"
+                  size="sm"
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Get App
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Setup Instructions */}
+      {streamingConfig && (
+        <Card className="p-4 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Setup Instructions</h2>
+          <div className="space-y-3">
+            <div className="flex items-start space-x-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
+              <p className="text-sm">{streamingConfig.instructions.step1}</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+              <p className="text-sm">{streamingConfig.instructions.step2}</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
+              <p className="text-sm">{streamingConfig.instructions.step3}</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">4</div>
+              <p className="text-sm">{streamingConfig.instructions.step4}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Benefits */}
       <Card className="p-4 mt-6 bg-blue-50 dark:bg-blue-900/20">
-        <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">How to Use:</h3>
-        <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
-          <li>Make sure your dashboard is open on another device</li>
-          <li>Connect to the dashboard using the button above</li>
-          <li>Start your camera and select the appropriate device</li>
-          <li>Begin streaming to send video frames for AI analysis</li>
-          <li>View results and analysis on the dashboard in real-time</li>
-        </ol>
+        <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">RTMP Streaming Benefits:</h3>
+        <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">
+          <li><strong>Multiple Devices:</strong> Support unlimited simultaneous mobile phone streams</li>
+          <li><strong>Professional Quality:</strong> Low latency, high-quality video streaming</li>
+          <li><strong>Reliable Connection:</strong> Robust RTMP protocol with automatic reconnection</li>
+          <li><strong>Cross-Platform:</strong> Works with any RTMP-compatible mobile app</li>
+          <li><strong>Centralized Monitoring:</strong> All streams analyzed on single dashboard</li>
+        </ul>
       </Card>
     </div>
   );
