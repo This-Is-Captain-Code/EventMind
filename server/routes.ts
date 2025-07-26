@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { VertexAIVisionPlatformService } from "./services/vertex-ai-vision-platform";
+import { incidentTracker } from "./services/incident-tracker";
 
 import { z } from "zod";
 
@@ -260,6 +261,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error registering device:', error);
       res.status(500).json({ 
         error: 'Failed to register device',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // 🚨 SAFETY INCIDENT MANAGEMENT ENDPOINTS
+  
+  // Get all recent incidents
+  app.get("/api/incidents", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const incidents = await incidentTracker.getRecentIncidents(limit);
+      res.json(incidents);
+    } catch (error) {
+      console.error('Error fetching incidents:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch incidents',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Get incidents by severity
+  app.get("/api/incidents/severity/:severity", async (req, res) => {
+    try {
+      const severity = req.params.severity.toUpperCase() as 'HIGH' | 'MEDIUM';
+      if (severity !== 'HIGH' && severity !== 'MEDIUM') {
+        return res.status(400).json({ error: 'Severity must be HIGH or MEDIUM' });
+      }
+      
+      const limit = parseInt(req.query.limit as string) || 25;
+      const incidents = await incidentTracker.getIncidentsBySeverity(severity, limit);
+      res.json(incidents);
+    } catch (error) {
+      console.error('Error fetching incidents by severity:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch incidents by severity',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Get incident statistics
+  app.get("/api/incidents/stats", async (req, res) => {
+    try {
+      const hoursBack = parseInt(req.query.hours as string) || 24;
+      const stats = await incidentTracker.getIncidentStats(hoursBack);
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching incident stats:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch incident statistics',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Acknowledge an incident
+  app.post("/api/incidents/:incidentId/acknowledge", async (req, res) => {
+    try {
+      const { incidentId } = req.params;
+      const { notes } = req.body;
+      
+      const success = await incidentTracker.acknowledgeIncident(incidentId, notes);
+      
+      if (success) {
+        res.json({ success: true, message: 'Incident acknowledged successfully' });
+      } else {
+        res.status(404).json({ error: 'Incident not found or could not be acknowledged' });
+      }
+    } catch (error) {
+      console.error('Error acknowledging incident:', error);
+      res.status(500).json({ 
+        error: 'Failed to acknowledge incident',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Manual incident recording (for testing or manual entries)
+  app.post("/api/incidents", async (req, res) => {
+    try {
+      const { incidentType, severity, confidence, personCount, notes } = req.body;
+      
+      if (!incidentType || !severity) {
+        return res.status(400).json({ error: 'incidentType and severity are required' });
+      }
+
+      const incidentId = await incidentTracker.recordIncident({
+        incidentType,
+        severity,
+        confidence: confidence || 0.9,
+        personCount,
+        streamSource: 'manual',
+        notes
+      });
+
+      res.status(201).json({ 
+        success: true, 
+        incidentId,
+        message: 'Incident recorded successfully' 
+      });
+    } catch (error) {
+      console.error('Error recording manual incident:', error);
+      res.status(500).json({ 
+        error: 'Failed to record incident',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }

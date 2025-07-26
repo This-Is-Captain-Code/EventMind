@@ -40,6 +40,38 @@ export const visionAnalyses = pgTable("vision_analyses", {
   confidence: real("confidence"),
 });
 
+// Comprehensive safety incident tracking table
+export const safetyIncidents = pgTable("safety_incidents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  
+  // Incident classification
+  incidentType: text("incident_type").notNull(), // 'DENSITY_ALERT', 'FALLING_PERSON', 'LYING_PERSON', 'SURGE_DETECTION'
+  severity: text("severity").notNull(), // 'HIGH', 'MEDIUM'
+  
+  // Detection details
+  confidence: real("confidence").notNull(), // Detection confidence score
+  personCount: text("person_count"), // Number of people detected (for density alerts)
+  
+  // Location and context
+  streamSource: text("stream_source"), // Which camera/device detected the incident
+  applicationId: text("application_id"), // Vertex AI application ID
+  streamId: text("stream_id"), // Stream identifier
+  
+  // Frame analysis data
+  frameId: text("frame_id"), // Unique frame identifier
+  analysisId: text("analysis_id"), // Vision analysis ID
+  
+  // Detailed incident data (JSON format for flexibility)
+  detectionData: jsonb("detection_data"), // Full detection objects with bounding boxes
+  safetyAnalysis: jsonb("safety_analysis"), // Safety analyzer results
+  
+  // Status tracking
+  acknowledged: text("acknowledged").default("false"),
+  resolvedAt: timestamp("resolved_at"),
+  notes: text("notes"), // Manual notes from security personnel
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -62,6 +94,11 @@ export const insertVisionAnalysisSchema = createInsertSchema(visionAnalyses).omi
   timestamp: true,
 });
 
+export const insertSafetyIncidentSchema = createInsertSchema(safetyIncidents).omit({
+  id: true,
+  timestamp: true,
+});
+
 // Type exports
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -74,6 +111,9 @@ export type InsertVisionStream = z.infer<typeof insertVisionStreamSchema>;
 
 export type VisionAnalysis = typeof visionAnalyses.$inferSelect;
 export type InsertVisionAnalysis = z.infer<typeof insertVisionAnalysisSchema>;
+
+export type SafetyIncident = typeof safetyIncidents.$inferSelect;
+export type InsertSafetyIncident = z.infer<typeof insertSafetyIncidentSchema>;
 
 // Additional types for Vertex AI Vision platform
 export interface VisionPlatformRequest {
