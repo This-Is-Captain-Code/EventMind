@@ -3,7 +3,6 @@ import aiplatform from "@google-cloud/aiplatform";
 import { VideoIntelligenceServiceClient } from "@google-cloud/video-intelligence";
 import * as fs from "fs";
 import { SafetyAnalyzer } from "./safety-analyzer";
-import { incidentTracker } from "./incident-tracker";
 
 export interface VisionApplication {
   name: string;
@@ -280,41 +279,6 @@ export class VertexAIVisionPlatformService {
       };
 
       const safetyAnalysis = await this.safetyAnalyzer.processFrame(frameData);
-
-      // 🚨 INCIDENT TRACKING: Record HIGH and MEDIUM incidents to database
-      try {
-        const recordedIncidents: string[] = [];
-
-        // Track occupancy density alerts
-        const occupancyDetection = detections.find(d => d.type === 'OCCUPANCY_COUNT');
-        if (occupancyDetection && (occupancyDetection.density === 'HIGH' || occupancyDetection.density === 'MEDIUM')) {
-          const incidentId = await incidentTracker.processOccupancyAlert({
-            personCount: occupancyDetection.count || 0,
-            density: occupancyDetection.density,
-            confidence: occupancyDetection.confidence || 0.9,
-            frameId: frameData.frameId,
-            analysisId: Date.now().toString(),
-            detectionData: occupancyDetection
-          });
-          if (incidentId) recordedIncidents.push(incidentId);
-        }
-
-        // Track safety analysis incidents (falling, lying, surges)
-        if (safetyAnalysis) {
-          const safetyIncidents = await incidentTracker.processSafetyAnalysis(
-            safetyAnalysis,
-            frameData.frameId,
-            Date.now().toString()
-          );
-          recordedIncidents.push(...safetyIncidents);
-        }
-
-        if (recordedIncidents.length > 0) {
-          console.log(`🚨 RECORDED ${recordedIncidents.length} SAFETY INCIDENTS: ${recordedIncidents.join(', ')}`);
-        }
-      } catch (error) {
-        console.error("Failed to record safety incidents:", error);
-      }
 
       const analysis: VisionAnalysis = {
         id: Date.now().toString(),
@@ -1233,5 +1197,12 @@ export class VertexAIVisionPlatformService {
       status: allHealthy ? "healthy" : "unhealthy",
       services,
     };
+  }
+
+  /**
+   * Get safety analysis statistics from the safety analyzer
+   */
+  getSafetyStats(): any {
+    return this.safetyAnalyzer.getSafetyStats();
   }
 }

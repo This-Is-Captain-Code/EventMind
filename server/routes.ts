@@ -37,23 +37,6 @@ const processFrameSchema = z.object({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  // Initialize storage and clear old data on startup
-  console.log('🚀 Initializing server...');
-  const removedCount = await storage.clearOldVisionAnalyses(60); // Clear data older than 1 hour
-  console.log(`✅ Server initialized - cleared ${removedCount} old analysis records`);
-  
-  // Set up periodic cleanup every 15 minutes to maintain real-time data only
-  setInterval(async () => {
-    try {
-      const cleanedCount = await storage.clearOldVisionAnalyses(60); // Clear data older than 1 hour
-      if (cleanedCount > 0) {
-        console.log(`🧹 Periodic cleanup: removed ${cleanedCount} old analysis records`);
-      }
-    } catch (error) {
-      console.error('Error during periodic cleanup:', error);
-    }
-  }, 15 * 60 * 1000); // 15 minutes
-  
   // Health check endpoint
   app.get("/api/health", async (req, res) => {
     try {
@@ -161,14 +144,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process frame with Vertex AI Vision platform
       const analysis = await vertexAIVisionService.processFrame(validatedData);
       
-      // Store analysis result in memory for the analysis history
-      await storage.createVisionAnalysis({
-        streamId: analysis.streamId,
+      // Store analysis result in database for the analysis history
+      const storedAnalysis = await storage.createVisionAnalysis({
+        streamId: analysis.streamId || 'default-stream',
         frameData: validatedData.frameData.substring(0, 100) + '...', // Store truncated frame data
         annotations: analysis.detections,
         processingTime: analysis.processingTime,
         confidence: analysis.confidence
       });
+
+      // **AUTOMATIC INCIDENT TRACKING**
+      // Check for high-density crowd situations and log as incidents
+      if (analysis.occupancyDensity && analysis.occupancyDensity.personCount > 0) {
+        const densityLevel = analysis.occupancyDensity.densityLevel;
+        const personCount = analysis.occupancyDensity.personCount;
+        
+        // Log density alerts for HIGH and MEDIUM severity
+        if (densityLevel === 'HIGH' || densityLevel === 'MEDIUM') {
+          await incidentTracker.processDensityAlert(
+            personCount,
+            densityLevel,
+            analysis.frameId || Date.now().toString(),
+            storedAnalysis.id,
+            validatedData.applicationId,
+            validatedData.streamId
+          );
+        }
+      }
+
+      // Process safety analysis results for incidents (density surges, falling persons, lying persons)
+      if (analysis.safetyAnalysis) {
+        await incidentTracker.processSafetyAnalysis(
+          analysis.safetyAnalysis,
+          analysis.frameId || Date.now().toString(),
+          storedAnalysis.id,
+          validatedData.applicationId,
+          validatedData.streamId
+        );
+      }
       
       res.json(analysis);
     } catch (error) {
@@ -200,46 +213,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Clear all analysis data
-  app.delete("/api/vision/analyses", async (req, res) => {
-    try {
-      await storage.clearAllVisionAnalyses();
-      res.json({ message: "All analysis data cleared successfully" });
-    } catch (error) {
-      console.error('Error clearing analyses:', error);
-      res.status(500).json({ 
-        error: error instanceof Error ? error.message : 'Failed to clear analyses' 
-      });
-    }
-  });
-
-  // Clear old analysis data
-  app.delete("/api/vision/analyses/old", async (req, res) => {
-    try {
-      const maxAgeMinutes = parseInt(req.query.maxAge as string) || 60; // Default 1 hour
-      const removedCount = await storage.clearOldVisionAnalyses(maxAgeMinutes);
-      res.json({ 
-        message: `Cleared ${removedCount} old analysis records`,
-        removedCount,
-        maxAgeMinutes 
-      });
-    } catch (error) {
-      console.error('Error clearing old analyses:', error);
-      res.status(500).json({ 
-        error: error instanceof Error ? error.message : 'Failed to clear old analyses' 
-      });
-    }
-  });
-
   // Real-time Safety Statistics
   app.get("/api/safety/stats", async (req, res) => {
     try {
       const safetyStats = vertexAIVisionService.getSafetyStats();
-      res.json(safetyStats);
+      const incidentStats = await incidentTracker.getIncidentStats();
+      
+      res.json({
+        ...safetyStats,
+        incidents: incidentStats
+      });
     } catch (error) {
       console.error('Error getting safety stats:', error);
       res.status(500).json({ 
         error: 'Failed to get safety statistics',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Safety Incidents Endpoints
+  app.get("/api/safety/incidents", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const incidents = await incidentTracker.getRecentIncidents(limit);
+      res.json(incidents);
+    } catch (error) {
+      console.error('Error fetching incidents:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch safety incidents',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.post("/api/safety/incidents/:id/acknowledge", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+      
+      await incidentTracker.acknowledgeIncident(id, notes);
+      res.json({ message: 'Incident acknowledged successfully' });
+    } catch (error) {
+      console.error('Error acknowledging incident:', error);
+      res.status(500).json({ 
+        error: 'Failed to acknowledge incident',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
@@ -309,112 +327,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error registering device:', error);
       res.status(500).json({ 
         error: 'Failed to register device',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  });
-
-  // 🚨 SAFETY INCIDENT MANAGEMENT ENDPOINTS
-  
-  // Get all recent incidents
-  app.get("/api/incidents", async (req, res) => {
-    try {
-      const limit = parseInt(req.query.limit as string) || 50;
-      const incidents = await incidentTracker.getRecentIncidents(limit);
-      res.json(incidents);
-    } catch (error) {
-      console.error('Error fetching incidents:', error);
-      res.status(500).json({ 
-        error: 'Failed to fetch incidents',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  });
-
-  // Get incidents by severity
-  app.get("/api/incidents/severity/:severity", async (req, res) => {
-    try {
-      const severity = req.params.severity.toUpperCase() as 'HIGH' | 'MEDIUM';
-      if (severity !== 'HIGH' && severity !== 'MEDIUM') {
-        return res.status(400).json({ error: 'Severity must be HIGH or MEDIUM' });
-      }
-      
-      const limit = parseInt(req.query.limit as string) || 25;
-      const incidents = await incidentTracker.getIncidentsBySeverity(severity, limit);
-      res.json(incidents);
-    } catch (error) {
-      console.error('Error fetching incidents by severity:', error);
-      res.status(500).json({ 
-        error: 'Failed to fetch incidents by severity',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  });
-
-  // Get incident statistics
-  app.get("/api/incidents/stats", async (req, res) => {
-    try {
-      const hoursBack = parseInt(req.query.hours as string) || 24;
-      const stats = await incidentTracker.getIncidentStats(hoursBack);
-      res.json(stats);
-    } catch (error) {
-      console.error('Error fetching incident stats:', error);
-      res.status(500).json({ 
-        error: 'Failed to fetch incident statistics',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  });
-
-  // Acknowledge an incident
-  app.post("/api/incidents/:incidentId/acknowledge", async (req, res) => {
-    try {
-      const { incidentId } = req.params;
-      const { notes } = req.body;
-      
-      const success = await incidentTracker.acknowledgeIncident(incidentId, notes);
-      
-      if (success) {
-        res.json({ success: true, message: 'Incident acknowledged successfully' });
-      } else {
-        res.status(404).json({ error: 'Incident not found or could not be acknowledged' });
-      }
-    } catch (error) {
-      console.error('Error acknowledging incident:', error);
-      res.status(500).json({ 
-        error: 'Failed to acknowledge incident',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  });
-
-  // Manual incident recording (for testing or manual entries)
-  app.post("/api/incidents", async (req, res) => {
-    try {
-      const { incidentType, severity, confidence, personCount, notes } = req.body;
-      
-      if (!incidentType || !severity) {
-        return res.status(400).json({ error: 'incidentType and severity are required' });
-      }
-
-      const incidentId = await incidentTracker.recordIncident({
-        incidentType,
-        severity,
-        confidence: confidence || 0.9,
-        personCount,
-        streamSource: 'manual',
-        notes
-      });
-
-      res.status(201).json({ 
-        success: true, 
-        incidentId,
-        message: 'Incident recorded successfully' 
-      });
-    } catch (error) {
-      console.error('Error recording manual incident:', error);
-      res.status(500).json({ 
-        error: 'Failed to record incident',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }

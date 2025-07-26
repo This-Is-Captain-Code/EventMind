@@ -21,9 +21,7 @@ import {
   useDeployApplication,
   useProcessFrame,
   useVisionAnalyses,
-  usePlatformHealth,
-  useClearAllAnalyses,
-  useClearOldAnalyses
+  usePlatformHealth
 } from '@/hooks/use-vertex-ai-platform';
 
 const AVAILABLE_MODELS = [
@@ -107,8 +105,6 @@ export default function VertexAIPlatform() {
   const createStream = useCreateVisionStream();
   const deployApp = useDeployApplication();
   const processFrame = useProcessFrame();
-  const clearAllAnalyses = useClearAllAnalyses();
-  const clearOldAnalyses = useClearOldAnalyses();
 
   const switchCamera = async (deviceId: string) => {
     setSelectedDevice(deviceId);
@@ -242,35 +238,6 @@ export default function VertexAIPlatform() {
       }
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleClearAllData = async () => {
-    try {
-      await clearAllAnalyses.mutateAsync();
-      toast({ title: "Success", description: "All analysis data cleared successfully" });
-    } catch (error) {
-      toast({ 
-        title: "Error", 
-        description: error instanceof Error ? error.message : "Failed to clear data",
-        variant: "destructive" 
-      });
-    }
-  };
-
-  const handleClearOldData = async () => {
-    try {
-      const result = await clearOldAnalyses.mutateAsync(60); // Clear data older than 1 hour
-      toast({ 
-        title: "Success", 
-        description: `Cleared ${result.removedCount} old analysis records` 
-      });
-    } catch (error) {
-      toast({ 
-        title: "Error", 
-        description: error instanceof Error ? error.message : "Failed to clear old data",
-        variant: "destructive" 
-      });
     }
   };
 
@@ -1051,32 +1018,10 @@ export default function VertexAIPlatform() {
         <TabsContent value="history" className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Analysis History</CardTitle>
-                  <CardDescription>
-                    Recent frame analysis results (real-time data only)
-                  </CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleClearOldData}
-                    disabled={clearOldAnalyses.isPending}
-                  >
-                    {clearOldAnalyses.isPending ? "Clearing..." : "Clear Old Data"}
-                  </Button>
-                  <Button 
-                    variant="destructive" 
-                    size="sm"
-                    onClick={handleClearAllData}
-                    disabled={clearAllAnalyses.isPending}
-                  >
-                    {clearAllAnalyses.isPending ? "Clearing..." : "Clear All Data"}
-                  </Button>
-                </div>
-              </div>
+              <CardTitle>Analysis History</CardTitle>
+              <CardDescription>
+                Recent frame analysis results
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {analysesArray.length ? (

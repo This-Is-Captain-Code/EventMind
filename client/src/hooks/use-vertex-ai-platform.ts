@@ -141,43 +141,6 @@ export function useVisionAnalysis(id: string) {
   });
 }
 
-// Data Management
-export function useClearAllAnalyses() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async () => {
-      const response = await fetch('/api/vision/analyses', {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error('Failed to clear analyses');
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/vision/analyses'] });
-    },
-  });
-}
-
-export function useClearOldAnalyses() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (maxAgeMinutes: number = 60) => {
-      const response = await fetch(`/api/vision/analyses/old?maxAge=${maxAgeMinutes}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error('Failed to clear old analyses');
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/vision/analyses'] });
-    },
-  });
-}
-
 // Platform Health
 export function usePlatformHealth() {
   return useQuery({

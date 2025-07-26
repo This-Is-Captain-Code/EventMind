@@ -6,15 +6,9 @@ import {
   type VisionApplication,
   type InsertVisionApplication,
   type VisionStream,
-  type InsertVisionStream,
-  users,
-  visionApplications,
-  visionStreams,
-  visionAnalyses
+  type InsertVisionStream
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User management
@@ -39,138 +33,128 @@ export interface IStorage {
   getRecentVisionAnalyses(limit: number): Promise<VisionAnalysis[]>;
   getVisionAnalysesByStream(streamId: string, limit: number): Promise<VisionAnalysis[]>;
   getVisionAnalysis(id: string): Promise<VisionAnalysis | undefined>;
-  clearAllVisionAnalyses(): Promise<void>;
-  clearOldVisionAnalyses(maxAgeMinutes: number): Promise<number>;
 }
 
-export class DatabaseStorage implements IStorage {
+export class MemStorage implements IStorage {
+  private users: Map<string, User>;
+  private visionApplications: Map<string, VisionApplication>;
+  private visionStreams: Map<string, VisionStream>;
+  public visionAnalyses: Map<string, VisionAnalysis>;
+
+  constructor() {
+    this.users = new Map();
+    this.visionApplications = new Map();
+    this.visionStreams = new Map();
+    this.visionAnalyses = new Map();
+  }
+
   // User management
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+    return this.users.get(id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user || undefined;
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username,
+    );
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
+    const id = randomUUID();
+    const user: User = { ...insertUser, id };
+    this.users.set(id, user);
     return user;
   }
 
   // Vision Application management
   async createVisionApplication(insertApp: InsertVisionApplication): Promise<VisionApplication> {
-    const [app] = await db
-      .insert(visionApplications)
-      .values(insertApp)
-      .returning();
+    const id = randomUUID();
+    const app: VisionApplication = {
+      id,
+      createTime: new Date(),
+      updateTime: new Date(),
+      ...insertApp,
+    };
+    this.visionApplications.set(id, app);
     return app;
   }
 
   async getVisionApplication(id: string): Promise<VisionApplication | undefined> {
-    const [app] = await db.select().from(visionApplications).where(eq(visionApplications.id, id));
-    return app || undefined;
+    return this.visionApplications.get(id);
   }
 
   async getVisionApplications(): Promise<VisionApplication[]> {
-    return await db.select().from(visionApplications);
+    return Array.from(this.visionApplications.values());
   }
 
   async updateVisionApplicationState(id: string, state: string): Promise<void> {
-    await db
-      .update(visionApplications)
-      .set({ state, updateTime: new Date() })
-      .where(eq(visionApplications.id, id));
+    const app = this.visionApplications.get(id);
+    if (app) {
+      app.state = state;
+      app.updateTime = new Date();
+      this.visionApplications.set(id, app);
+    }
   }
 
   // Vision Stream management
   async createVisionStream(insertStream: InsertVisionStream): Promise<VisionStream> {
-    const [stream] = await db
-      .insert(visionStreams)
-      .values(insertStream)
-      .returning();
+    const id = randomUUID();
+    const stream: VisionStream = {
+      id,
+      createTime: new Date(),
+      ...insertStream,
+    };
+    this.visionStreams.set(id, stream);
     return stream;
   }
 
   async getVisionStream(id: string): Promise<VisionStream | undefined> {
-    const [stream] = await db.select().from(visionStreams).where(eq(visionStreams.id, id));
-    return stream || undefined;
+    return this.visionStreams.get(id);
   }
 
   async getVisionStreamsByApplication(applicationId: string): Promise<VisionStream[]> {
-    return await db
-      .select()
-      .from(visionStreams)
-      .where(eq(visionStreams.applicationId, applicationId));
+    return Array.from(this.visionStreams.values()).filter(
+      stream => stream.applicationId === applicationId
+    );
   }
 
   async updateVisionStreamState(id: string, state: string): Promise<void> {
-    await db
-      .update(visionStreams)
-      .set({ state })
-      .where(eq(visionStreams.id, id));
+    const stream = this.visionStreams.get(id);
+    if (stream) {
+      stream.state = state;
+      this.visionStreams.set(id, stream);
+    }
   }
 
   // Vision Analysis management
   async createVisionAnalysis(insertAnalysis: InsertVisionAnalysis): Promise<VisionAnalysis> {
-    const [analysis] = await db
-      .insert(visionAnalyses)
-      .values(insertAnalysis)
-      .returning();
+    const id = randomUUID();
+    const analysis: VisionAnalysis = {
+      id,
+      timestamp: new Date(),
+      ...insertAnalysis,
+    };
+    this.visionAnalyses.set(id, analysis);
     return analysis;
   }
 
   async getRecentVisionAnalyses(limit: number): Promise<VisionAnalysis[]> {
-    return await db
-      .select()
-      .from(visionAnalyses)
-      .orderBy(desc(visionAnalyses.timestamp))
-      .limit(limit);
+    const analyses = Array.from(this.visionAnalyses.values())
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+    return analyses;
   }
 
   async getVisionAnalysesByStream(streamId: string, limit: number): Promise<VisionAnalysis[]> {
-    return await db
-      .select()
-      .from(visionAnalyses)
-      .where(eq(visionAnalyses.streamId, streamId))
-      .orderBy(desc(visionAnalyses.timestamp))
-      .limit(limit);
+    return Array.from(this.visionAnalyses.values())
+      .filter(analysis => analysis.streamId === streamId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
   }
 
   async getVisionAnalysis(id: string): Promise<VisionAnalysis | undefined> {
-    const [analysis] = await db.select().from(visionAnalyses).where(eq(visionAnalyses.id, id));
-    return analysis || undefined;
-  }
-
-  async clearAllVisionAnalyses(): Promise<void> {
-    await db.delete(visionAnalyses);
-    console.log('🗑️ Cleared all vision analysis data from database');
-  }
-
-  async clearOldVisionAnalyses(maxAgeMinutes: number): Promise<number> {
-    const cutoffTime = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
-    
-    // Get count before deletion
-    const oldAnalyses = await db
-      .select({ count: sql`count(*)` })
-      .from(visionAnalyses)
-      .where(sql`${visionAnalyses.timestamp} < ${cutoffTime}`);
-    
-    const countBefore = Number(oldAnalyses[0]?.count || 0);
-    
-    // Delete old analyses
-    await db
-      .delete(visionAnalyses)
-      .where(sql`${visionAnalyses.timestamp} < ${cutoffTime}`);
-    
-    console.log(`🗑️ Removed ${countBefore} old vision analyses from database (older than ${maxAgeMinutes} minutes)`);
-    return countBefore;
+    return this.visionAnalyses.get(id);
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new MemStorage();

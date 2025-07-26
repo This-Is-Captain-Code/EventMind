@@ -32,7 +32,7 @@ export const visionStreams = pgTable("vision_streams", {
 
 export const visionAnalyses = pgTable("vision_analyses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  streamId: varchar("stream_id").references(() => visionStreams.id).notNull(),
+  streamId: varchar("stream_id").references(() => visionStreams.id),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   frameData: text("frame_data"), // base64 encoded frame
   annotations: jsonb("annotations"), // Vision model annotations
@@ -40,36 +40,23 @@ export const visionAnalyses = pgTable("vision_analyses", {
   confidence: real("confidence"),
 });
 
-// Comprehensive safety incident tracking table
 export const safetyIncidents = pgTable("safety_incidents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
-  
-  // Incident classification
-  incidentType: text("incident_type").notNull(), // 'DENSITY_ALERT', 'FALLING_PERSON', 'LYING_PERSON', 'SURGE_DETECTION'
-  severity: text("severity").notNull(), // 'HIGH', 'MEDIUM'
-  
-  // Detection details
-  confidence: real("confidence").notNull(), // Detection confidence score
-  personCount: text("person_count"), // Number of people detected (for density alerts)
-  
-  // Location and context
-  streamSource: text("stream_source"), // Which camera/device detected the incident
-  applicationId: text("application_id"), // Vertex AI application ID
-  streamId: text("stream_id"), // Stream identifier
-  
-  // Frame analysis data
-  frameId: text("frame_id"), // Unique frame identifier
-  analysisId: text("analysis_id"), // Vision analysis ID
-  
-  // Detailed incident data (JSON format for flexibility)
-  detectionData: jsonb("detection_data"), // Full detection objects with bounding boxes
-  safetyAnalysis: jsonb("safety_analysis"), // Safety analyzer results
-  
-  // Status tracking
+  incidentType: text("incident_type").notNull(), // DENSITY_ALERT, FALLING_PERSON, LYING_PERSON, SURGE_DETECTION
+  severity: text("severity").notNull(), // HIGH, MEDIUM
+  confidence: real("confidence").notNull(),
+  personCount: text("person_count"),
+  streamSource: text("stream_source"),
+  applicationId: text("application_id"),
+  streamId: text("stream_id"),
+  frameId: text("frame_id"),
+  analysisId: text("analysis_id"),
+  detectionData: jsonb("detection_data"),
+  safetyAnalysis: jsonb("safety_analysis"),
   acknowledged: text("acknowledged").default("false"),
   resolvedAt: timestamp("resolved_at"),
-  notes: text("notes"), // Manual notes from security personnel
+  notes: text("notes"),
 });
 
 // Insert schemas

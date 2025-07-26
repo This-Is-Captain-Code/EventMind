@@ -1,254 +1,252 @@
 import { db } from "../db";
-import { safetyIncidents, type InsertSafetyIncident } from "@shared/schema";
-import { eq, desc, and, gte } from "drizzle-orm";
+import { safetyIncidents, type InsertSafetyIncident, type SafetyIncident } from "@shared/schema";
+import { desc, eq, sql } from "drizzle-orm";
+
+export interface IncidentData {
+  incidentType: 'DENSITY_ALERT' | 'FALLING_PERSON' | 'LYING_PERSON' | 'SURGE_DETECTION';
+  severity: 'HIGH' | 'MEDIUM';
+  confidence: number;
+  personCount?: string;
+  streamSource?: string;
+  applicationId?: string;
+  streamId?: string;
+  frameId?: string;
+  analysisId?: string;
+  detectionData?: any;
+  safetyAnalysis?: any;
+}
 
 export class IncidentTracker {
-  
   /**
    * Record a safety incident to the database
-   * Handles all types: DENSITY_ALERT, FALLING_PERSON, LYING_PERSON, SURGE_DETECTION
    */
-  async recordIncident(incident: {
-    incidentType: 'DENSITY_ALERT' | 'FALLING_PERSON' | 'LYING_PERSON' | 'SURGE_DETECTION';
-    severity: 'HIGH' | 'MEDIUM';
-    confidence: number;
-    personCount?: number;
-    streamSource?: string;
-    applicationId?: string;
-    streamId?: string;
-    frameId?: string;
-    analysisId?: string;
-    detectionData?: any;
-    safetyAnalysis?: any;
-  }): Promise<string> {
-    try {
-      const incidentData: InsertSafetyIncident = {
-        incidentType: incident.incidentType,
-        severity: incident.severity,
-        confidence: incident.confidence,
-        personCount: incident.personCount?.toString() || null,
-        streamSource: incident.streamSource || null,
-        applicationId: incident.applicationId || null,
-        streamId: incident.streamId || null,
-        frameId: incident.frameId || null,
-        analysisId: incident.analysisId || null,
-        detectionData: incident.detectionData || null,
-        safetyAnalysis: incident.safetyAnalysis || null,
-        acknowledged: "false",
-        resolvedAt: null,
-        notes: null
-      };
+  async recordIncident(incidentData: IncidentData): Promise<SafetyIncident> {
+    const insertData: InsertSafetyIncident = {
+      incidentType: incidentData.incidentType,
+      severity: incidentData.severity,
+      confidence: incidentData.confidence,
+      personCount: incidentData.personCount,
+      streamSource: incidentData.streamSource || 'default-camera',
+      applicationId: incidentData.applicationId || 'default-app',
+      streamId: incidentData.streamId || 'default-stream',
+      frameId: incidentData.frameId,
+      analysisId: incidentData.analysisId,
+      detectionData: incidentData.detectionData,
+      safetyAnalysis: incidentData.safetyAnalysis,
+      acknowledged: "false"
+    };
 
-      const [insertedIncident] = await db
-        .insert(safetyIncidents)
-        .values(incidentData)
-        .returning({ id: safetyIncidents.id });
+    const [incident] = await db
+      .insert(safetyIncidents)
+      .values(insertData)
+      .returning();
 
-      console.log(`🚨 INCIDENT RECORDED: ${incident.incidentType} - ${incident.severity} severity (ID: ${insertedIncident.id})`);
-      
-      return insertedIncident.id;
-    } catch (error) {
-      console.error("Failed to record safety incident:", error);
-      throw error;
-    }
+    console.log(`🚨 INCIDENT RECORDED: ${incident.incidentType} - ${incident.severity} severity (ID: ${incident.id})`);
+    
+    return incident;
   }
 
   /**
-   * Process occupancy density and record if HIGH or MEDIUM
+   * Record multiple incidents at once
    */
-  async processOccupancyAlert(data: {
-    personCount: number;
-    density: string;
-    confidence: number;
-    frameId?: string;
-    analysisId?: string;
-    detectionData?: any;
-  }): Promise<string | null> {
-    if (data.density === 'HIGH' || data.density === 'MEDIUM') {
-      return await this.recordIncident({
-        incidentType: 'DENSITY_ALERT',
-        severity: data.density as 'HIGH' | 'MEDIUM',
-        confidence: data.confidence,
-        personCount: data.personCount,
-        frameId: data.frameId,
-        analysisId: data.analysisId,
-        detectionData: data.detectionData,
-        safetyAnalysis: {
-          densityLevel: data.density,
-          personCount: data.personCount,
-          alertTrigger: `Occupancy ${data.density.toLowerCase()} density threshold exceeded`
-        }
-      });
-    }
-    return null;
-  }
+  async recordIncidents(incidents: IncidentData[]): Promise<SafetyIncident[]> {
+    if (incidents.length === 0) return [];
 
-  /**
-   * Process safety analysis results and record incidents
-   */
-  async processSafetyAnalysis(safetyData: any, frameId?: string, analysisId?: string): Promise<string[]> {
-    const recordedIncidents: string[] = [];
+    const insertData: InsertSafetyIncident[] = incidents.map(incident => ({
+      incidentType: incident.incidentType,
+      severity: incident.severity,
+      confidence: incident.confidence,
+      personCount: incident.personCount,
+      streamSource: incident.streamSource || 'default-camera',
+      applicationId: incident.applicationId || 'default-app',
+      streamId: incident.streamId || 'default-stream',
+      frameId: incident.frameId,
+      analysisId: incident.analysisId,
+      detectionData: incident.detectionData,
+      safetyAnalysis: incident.safetyAnalysis,
+      acknowledged: "false"
+    }));
 
-    // Check for falling persons
-    if (safetyData.fallingPersons && safetyData.fallingPersons.length > 0) {
-      for (const fallingPerson of safetyData.fallingPersons) {
-        const incidentId = await this.recordIncident({
-          incidentType: 'FALLING_PERSON',
-          severity: 'HIGH', // Falling is always high severity
-          confidence: fallingPerson.confidence || 0.8,
-          personCount: 1,
-          frameId,
-          analysisId,
-          detectionData: fallingPerson,
-          safetyAnalysis: {
-            personId: fallingPerson.personId,
-            velocity: fallingPerson.velocity,
-            direction: fallingPerson.direction,
-            alertTrigger: 'Rapid downward movement detected'
-          }
-        });
-        recordedIncidents.push(incidentId);
-      }
-    }
+    const recordedIncidents = await db
+      .insert(safetyIncidents)
+      .values(insertData)
+      .returning();
 
-    // Check for lying persons
-    if (safetyData.lyingPersons && safetyData.lyingPersons.length > 0) {
-      for (const lyingPerson of safetyData.lyingPersons) {
-        const incidentId = await this.recordIncident({
-          incidentType: 'LYING_PERSON',
-          severity: 'MEDIUM', // Lying person is medium severity (could be resting)
-          confidence: lyingPerson.confidence || 0.7,
-          personCount: 1,
-          frameId,
-          analysisId,
-          detectionData: lyingPerson,
-          safetyAnalysis: {
-            personId: lyingPerson.personId,
-            aspectRatio: lyingPerson.aspectRatio,
-            duration: lyingPerson.duration,
-            alertTrigger: 'Person in horizontal position detected'
-          }
-        });
-        recordedIncidents.push(incidentId);
-      }
-    }
-
-    // Check for density surges
-    if (safetyData.densitySurges && safetyData.densitySurges.length > 0) {
-      for (const surge of safetyData.densitySurges) {
-        const incidentId = await this.recordIncident({
-          incidentType: 'SURGE_DETECTION',
-          severity: surge.severity || 'HIGH',
-          confidence: surge.confidence || 0.9,
-          personCount: surge.newDensity || 0,
-          frameId,
-          analysisId,
-          detectionData: surge,
-          safetyAnalysis: {
-            gridCell: surge.gridCell,
-            previousDensity: surge.previousDensity,
-            newDensity: surge.newDensity,
-            increasePercent: surge.increasePercent,
-            alertTrigger: `Density surge of ${surge.increasePercent}% detected in grid cell ${surge.gridCell}`
-          }
-        });
-        recordedIncidents.push(incidentId);
-      }
-    }
-
+    const incidentIds = recordedIncidents.map(i => i.id);
+    console.log(`🚨 RECORDED ${recordedIncidents.length} SAFETY INCIDENTS: ${incidentIds.join(', ')}`);
+    
     return recordedIncidents;
   }
 
   /**
    * Get recent incidents
    */
-  async getRecentIncidents(limit: number = 50): Promise<any[]> {
-    try {
-      const incidents = await db
-        .select()
-        .from(safetyIncidents)
-        .orderBy(desc(safetyIncidents.timestamp))
-        .limit(limit);
-
-      return incidents;
-    } catch (error) {
-      console.error("Failed to retrieve incidents:", error);
-      return [];
-    }
-  }
-
-  /**
-   * Get incidents by severity
-   */
-  async getIncidentsBySeverity(severity: 'HIGH' | 'MEDIUM', limit: number = 25): Promise<any[]> {
-    try {
-      const incidents = await db
-        .select()
-        .from(safetyIncidents)
-        .where(eq(safetyIncidents.severity, severity))
-        .orderBy(desc(safetyIncidents.timestamp))
-        .limit(limit);
-
-      return incidents;
-    } catch (error) {
-      console.error("Failed to retrieve incidents by severity:", error);
-      return [];
-    }
-  }
-
-  /**
-   * Acknowledge an incident
-   */
-  async acknowledgeIncident(incidentId: string, notes?: string): Promise<boolean> {
-    try {
-      await db
-        .update(safetyIncidents)
-        .set({ 
-          acknowledged: "true",
-          notes: notes || null
-        })
-        .where(eq(safetyIncidents.id, incidentId));
-
-      console.log(`✅ Incident ${incidentId} acknowledged`);
-      return true;
-    } catch (error) {
-      console.error("Failed to acknowledge incident:", error);
-      return false;
-    }
+  async getRecentIncidents(limit: number = 50): Promise<SafetyIncident[]> {
+    return await db
+      .select()
+      .from(safetyIncidents)
+      .orderBy(desc(safetyIncidents.timestamp))
+      .limit(limit);
   }
 
   /**
    * Get incident statistics
    */
-  async getIncidentStats(hoursBack: number = 24): Promise<any> {
-    try {
-      const cutoffTime = new Date();
-      cutoffTime.setHours(cutoffTime.getHours() - hoursBack);
+  async getIncidentStats(): Promise<{
+    total: number;
+    last24Hours: number;
+    highSeverity: number;
+    mediumSeverity: number;
+    acknowledged: number;
+    unacknowledged: number;
+  }> {
+    // Get total count
+    const totalResult = await db
+      .select({ count: sql`count(*)` })
+      .from(safetyIncidents);
+    
+    // Get last 24 hours count
+    const last24HoursResult = await db
+      .select({ count: sql`count(*)` })
+      .from(safetyIncidents)
+      .where(sql`${safetyIncidents.timestamp} > now() - interval '24 hours'`);
 
-      const recentIncidents = await db
-        .select()
-        .from(safetyIncidents)
-        .where(gte(safetyIncidents.timestamp, cutoffTime));
+    // Get severity counts
+    const highSeverityResult = await db
+      .select({ count: sql`count(*)` })
+      .from(safetyIncidents)
+      .where(eq(safetyIncidents.severity, 'HIGH'));
 
-      const stats = {
-        totalIncidents: recentIncidents.length,
-        highSeverity: recentIncidents.filter(i => i.severity === 'HIGH').length,
-        mediumSeverity: recentIncidents.filter(i => i.severity === 'MEDIUM').length,
-        byType: {
-          DENSITY_ALERT: recentIncidents.filter(i => i.incidentType === 'DENSITY_ALERT').length,
-          FALLING_PERSON: recentIncidents.filter(i => i.incidentType === 'FALLING_PERSON').length,
-          LYING_PERSON: recentIncidents.filter(i => i.incidentType === 'LYING_PERSON').length,
-          SURGE_DETECTION: recentIncidents.filter(i => i.incidentType === 'SURGE_DETECTION').length,
-        },
-        acknowledged: recentIncidents.filter(i => i.acknowledged === "true").length,
-        unacknowledged: recentIncidents.filter(i => i.acknowledged === "false").length
+    const mediumSeverityResult = await db
+      .select({ count: sql`count(*)` })
+      .from(safetyIncidents)
+      .where(eq(safetyIncidents.severity, 'MEDIUM'));
+
+    // Get acknowledgment counts
+    const acknowledgedResult = await db
+      .select({ count: sql`count(*)` })
+      .from(safetyIncidents)
+      .where(eq(safetyIncidents.acknowledged, 'true'));
+
+    const unacknowledgedResult = await db
+      .select({ count: sql`count(*)` })
+      .from(safetyIncidents)
+      .where(eq(safetyIncidents.acknowledged, 'false'));
+
+    return {
+      total: Number(totalResult[0]?.count || 0),
+      last24Hours: Number(last24HoursResult[0]?.count || 0),
+      highSeverity: Number(highSeverityResult[0]?.count || 0),
+      mediumSeverity: Number(mediumSeverityResult[0]?.count || 0),
+      acknowledged: Number(acknowledgedResult[0]?.count || 0),
+      unacknowledged: Number(unacknowledgedResult[0]?.count || 0)
+    };
+  }
+
+  /**
+   * Acknowledge an incident
+   */
+  async acknowledgeIncident(id: string, notes?: string): Promise<void> {
+    await db
+      .update(safetyIncidents)
+      .set({ 
+        acknowledged: "true", 
+        resolvedAt: new Date(),
+        notes: notes || null
+      })
+      .where(eq(safetyIncidents.id, id));
+  }
+
+  /**
+   * Process safety analysis results and record incidents automatically
+   */
+  async processSafetyAnalysis(safetyAnalysis: any, frameId: string, analysisId: string, applicationId?: string, streamId?: string): Promise<SafetyIncident[]> {
+    const incidents: IncidentData[] = [];
+
+    // Record density surges
+    if (safetyAnalysis.densitySurges && safetyAnalysis.densitySurges.length > 0) {
+      for (const surge of safetyAnalysis.densitySurges) {
+        incidents.push({
+          incidentType: 'SURGE_DETECTION',
+          severity: surge.severity || 'HIGH',
+          confidence: surge.confidence || 0.8,
+          frameId,
+          analysisId,
+          applicationId,
+          streamId,
+          detectionData: surge,
+          safetyAnalysis
+        });
+      }
+    }
+
+    // Record falling persons
+    if (safetyAnalysis.fallingPersons && safetyAnalysis.fallingPersons.length > 0) {
+      for (const falling of safetyAnalysis.fallingPersons) {
+        incidents.push({
+          incidentType: 'FALLING_PERSON',
+          severity: falling.severity || 'HIGH',
+          confidence: falling.confidence || 0.9,
+          frameId,
+          analysisId,
+          applicationId,
+          streamId,
+          detectionData: falling,
+          safetyAnalysis
+        });
+      }
+    }
+
+    // Record lying persons
+    if (safetyAnalysis.lyingPersons && safetyAnalysis.lyingPersons.length > 0) {
+      for (const lying of safetyAnalysis.lyingPersons) {
+        incidents.push({
+          incidentType: 'LYING_PERSON',
+          severity: lying.severity || 'MEDIUM',
+          confidence: lying.confidence || 0.7,
+          frameId,
+          analysisId,
+          applicationId,
+          streamId,
+          detectionData: lying,
+          safetyAnalysis
+        });
+      }
+    }
+
+    // Record incidents if any were detected
+    if (incidents.length > 0) {
+      return await this.recordIncidents(incidents);
+    }
+
+    return [];
+  }
+
+  /**
+   * Process occupancy density alerts and record as incidents
+   */
+  async processDensityAlert(personCount: number, densityLevel: string, frameId: string, analysisId: string, applicationId?: string, streamId?: string): Promise<SafetyIncident | null> {
+    // Only record HIGH and MEDIUM density as incidents
+    if (densityLevel === 'HIGH' || densityLevel === 'MEDIUM') {
+      const severity = densityLevel === 'HIGH' ? 'HIGH' : 'MEDIUM';
+      
+      const incidentData: IncidentData = {
+        incidentType: 'DENSITY_ALERT',
+        severity,
+        confidence: 0.95, // High confidence for density counting
+        personCount: personCount.toString(),
+        frameId,
+        analysisId,
+        applicationId,
+        streamId,
+        detectionData: { personCount, densityLevel },
+        safetyAnalysis: { densityLevel, personCount }
       };
 
-      return stats;
-    } catch (error) {
-      console.error("Failed to get incident statistics:", error);
-      return null;
+      return await this.recordIncident(incidentData);
     }
+
+    return null;
   }
 }
 
