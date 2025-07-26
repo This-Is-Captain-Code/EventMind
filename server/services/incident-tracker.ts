@@ -17,6 +17,223 @@ export interface IncidentData {
 }
 
 export class IncidentTracker {
+
+  /**
+   * Process density alerts for HIGH/MEDIUM density levels
+   */
+  async processDensityAlert(
+    personCount: number,
+    densityLevel: 'HIGH' | 'MEDIUM' | 'LOW',
+    frameId: string,
+    analysisId: string,
+    applicationId: string,
+    streamId: string
+  ): Promise<void> {
+    // Only log MEDIUM and HIGH density incidents
+    if (densityLevel === 'LOW') return;
+
+    const incident = {
+      type: 'DENSITY_ALERT' as const,
+      severity: densityLevel,
+      data: {
+        personCount,
+        densityLevel,
+        alertType: 'OCCUPANCY_DENSITY'
+      },
+      timestamp: Date.now(),
+      frameId,
+      analysisId,
+      applicationId,
+      streamId
+    };
+
+    // Publish to queue for reliable processing
+    const { incidentQueue } = await import('./incident-queue');
+    await incidentQueue.publishIncident(incident);
+  }
+
+  /**
+   * Record density incident directly (called from queue processor)
+   */
+  async recordDensityIncident(incident: any): Promise<SafetyIncident> {
+    const insertData: InsertSafetyIncident = {
+      timestamp: new Date(incident.timestamp),
+      incidentType: 'DENSITY_ALERT',
+      severity: incident.severity,
+      confidence: 0.9, // High confidence for density detection
+      personCount: incident.data.personCount,
+      streamSource: 'default-camera',
+      applicationId: incident.applicationId,
+      streamId: incident.streamId,
+      frameId: incident.frameId,
+      analysisId: incident.analysisId,
+      detectionData: incident.data,
+      safetyAnalysis: null,
+      acknowledged: 'false',
+      resolvedAt: null,
+      notes: null
+    };
+
+    const [newIncident] = await db
+      .insert(safetyIncidents)
+      .values(insertData)
+      .returning();
+
+    const localTime = new Date(newIncident.timestamp).toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    console.log(`🚨 DENSITY INCIDENT RECORDED: ${newIncident.incidentType} - ${newIncident.severity} severity (${incident.data.personCount} people) at ${localTime} (ID: ${newIncident.id})`);
+    
+    return newIncident;
+  }
+
+  /**
+   * Record safety analysis incident (called from queue processor)
+   */
+  async recordSafetyIncident(incident: any): Promise<SafetyIncident[]> {
+    const incidents: SafetyIncident[] = [];
+    
+    // Process each safety analysis type
+    const safetyAnalysis = incident.data;
+    
+    for (const surge of safetyAnalysis.densitySurges || []) {
+      if (surge.severity === 'HIGH' || surge.severity === 'MEDIUM') {
+        const insertData: InsertSafetyIncident = {
+          timestamp: new Date(incident.timestamp),
+          incidentType: 'SURGE_DETECTION',
+          severity: surge.severity,
+          confidence: 0.8,
+          personCount: null,
+          streamSource: 'default-camera',
+          applicationId: incident.applicationId,
+          streamId: incident.streamId,
+          frameId: incident.frameId,
+          analysisId: incident.analysisId,
+          detectionData: surge,
+          safetyAnalysis: safetyAnalysis,
+          acknowledged: 'false',
+          resolvedAt: null,
+          notes: null
+        };
+
+        const [newIncident] = await db
+          .insert(safetyIncidents)
+          .values(insertData)
+          .returning();
+        
+        incidents.push(newIncident);
+      }
+    }
+
+    for (const fallingPerson of safetyAnalysis.fallingPersons || []) {
+      const insertData: InsertSafetyIncident = {
+        timestamp: new Date(incident.timestamp),
+        incidentType: 'FALLING_PERSON',
+        severity: 'HIGH',
+        confidence: 0.9,
+        personCount: null,
+        streamSource: 'default-camera',
+        applicationId: incident.applicationId,
+        streamId: incident.streamId,
+        frameId: incident.frameId,
+        analysisId: incident.analysisId,
+        detectionData: fallingPerson,
+        safetyAnalysis: safetyAnalysis,
+        acknowledged: 'false',
+        resolvedAt: null,
+        notes: null
+      };
+
+      const [newIncident] = await db
+        .insert(safetyIncidents)
+        .values(insertData)
+        .returning();
+      
+      incidents.push(newIncident);
+    }
+
+    for (const lyingPerson of safetyAnalysis.lyingPersons || []) {
+      const insertData: InsertSafetyIncident = {
+        timestamp: new Date(incident.timestamp),
+        incidentType: 'LYING_PERSON',
+        severity: 'MEDIUM',
+        confidence: 0.8,
+        personCount: null,
+        streamSource: 'default-camera',
+        applicationId: incident.applicationId,
+        streamId: incident.streamId,
+        frameId: incident.frameId,
+        analysisId: incident.analysisId,
+        detectionData: lyingPerson,
+        safetyAnalysis: safetyAnalysis,
+        acknowledged: 'false',
+        resolvedAt: null,
+        notes: null
+      };
+
+      const [newIncident] = await db
+        .insert(safetyIncidents)
+        .values(insertData)
+        .returning();
+      
+      incidents.push(newIncident);
+    }
+
+    if (incidents.length > 0) {
+      const localTime = new Date(incident.timestamp).toLocaleString('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit', 
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      console.log(`🚨 RECORDED ${incidents.length} SAFETY INCIDENTS at ${localTime}`);
+    }
+
+    return incidents;
+  }
+
+  /**
+   * Process safety analysis results for incidents (main entry point)
+   */
+  async processSafetyAnalysis(
+    safetyAnalysis: any,
+    frameId: string,
+    analysisId: string,
+    applicationId: string,
+    streamId: string
+  ): Promise<void> {
+    if (!safetyAnalysis || 
+        (!safetyAnalysis.densitySurges?.length && 
+         !safetyAnalysis.fallingPersons?.length && 
+         !safetyAnalysis.lyingPersons?.length)) {
+      return; // No incidents to process
+    }
+
+    const incident = {
+      type: 'SAFETY_ANALYSIS' as const,
+      severity: safetyAnalysis.overallSafetyStatus === 'CRITICAL' ? 'HIGH' as const : 'MEDIUM' as const,
+      data: safetyAnalysis,
+      timestamp: Date.now(),
+      frameId,
+      analysisId,
+      applicationId,
+      streamId
+    };
+
+    // Publish to queue for reliable processing
+    const { incidentQueue } = await import('./incident-queue');
+    await incidentQueue.publishIncident(incident);
+  }
+
   /**
    * Record a safety incident to the database
    */

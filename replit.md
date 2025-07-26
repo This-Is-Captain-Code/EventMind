@@ -109,7 +109,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes: Latest modifications with dates
 
-### July 26, 2025 - RTMP Multi-Device Streaming Implementation & Enhanced Occupancy Density Display
+### July 26, 2025 - RabbitMQ Incident Queue & Fixed Density Alert System
+- **Implemented RabbitMQ pub/sub architecture** - Reliable incident processing queue with AMQP messaging for production-grade incident handling
+- **Fixed missing density alert tracking** - System now properly records MEDIUM and HIGH density incidents when person count thresholds are exceeded
+- **Enhanced incident processing** - Dual-path incident handling: density alerts (immediate crowd levels) + safety analysis (multi-frame behavior detection)
+- **Timezone display corrections** - Fixed timestamp display to show proper local time conversion (EDT/EST) instead of confusing UTC timestamps
+- **Severity threshold corrections** - Fixed density calculation bug that was creating artificially inflated severity ratings (64x multiplier issue resolved)
+- **Production-ready queue system** - RabbitMQ integration with automatic fallback to direct processing when message broker unavailable
+- **Comprehensive incident tracking** - All MEDIUM/HIGH density levels (5+ people) automatically logged to PostgreSQL database with full audit trail
+- **Real-time incident processing** - Pub/sub messaging ensures reliable incident recording even under high processing loads
+- **Queue consumer architecture** - Background processing workers handle incident recording separately from real-time video analysis pipeline
+
+### Previous: RTMP Multi-Device Streaming Implementation & Enhanced Occupancy Density Display
 - **Implemented Advanced Safety Analyzer** - Multi-frame analysis system for density surge detection and falling/lying person detection
 - **Real-time person tracking** - Sophisticated tracking system that follows individuals across multiple frames using position correlation
 - **Density surge detection** - 8x8 grid-based density analysis that detects crowd surges with configurable thresholds and severity levels
