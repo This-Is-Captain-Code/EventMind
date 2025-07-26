@@ -245,7 +245,7 @@ export default function VertexAIPlatform() {
   // Type-safe data access
   const applicationsArray = Array.isArray(applications) ? applications : [];
   const analysesArray = Array.isArray(analyses) ? analyses : [];
-  const selectedApp = applicationsArray.find((app: any) => app.id === selectedApplication);
+  const selectedApp = applicationsArray.find((app: any) => app.name === selectedApplication);
   const healthData = health && typeof health === 'object' ? health : null;
 
   return (
@@ -383,11 +383,11 @@ export default function VertexAIPlatform() {
                   ) : applicationsArray.length ? (
                     applicationsArray.map((app: any) => (
                       <div
-                        key={app.id}
+                        key={app.name}
                         className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                          selectedApplication === app.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                          selectedApplication === app.name ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
                         }`}
-                        onClick={() => setSelectedApplication(app.id)}
+                        onClick={() => setSelectedApplication(app.name)}
                       >
                         <div className="flex items-center justify-between">
                           <div>
@@ -399,7 +399,7 @@ export default function VertexAIPlatform() {
                           </Badge>
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
-                          {app.location} • Created {new Date(app.createTime).toLocaleDateString()}
+                          {app.name.split('/')[3]} • Created {new Date(app.createTime).toLocaleDateString()}
                         </div>
                       </div>
                     ))
