@@ -1,16 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import type { 
-  VisionApplication, 
-  VisionStream, 
-  VisionAnalysis,
-  VisionPlatformResponse 
-} from '@shared/schema';
 
 // Application Management
 export function useVisionApplications() {
   return useQuery({
-    queryKey: ['/api/vision/applications'],
+    queryKey: ['/api/vision/applications'] as const,
     queryFn: () => apiRequest('/api/vision/applications'),
     retry: 1,
     refetchOnMount: true,
@@ -20,7 +14,7 @@ export function useVisionApplications() {
 
 export function useVisionApplication(id: string) {
   return useQuery({
-    queryKey: ['/api/vision/applications', id],
+    queryKey: ['/api/vision/applications', id] as const,
     queryFn: () => apiRequest(`/api/vision/applications/${id}`),
     enabled: !!id,
   });
@@ -97,7 +91,7 @@ export function useCreateVisionStream() {
 
 export function useVisionStream(id: string) {
   return useQuery({
-    queryKey: ['/api/vision/streams', id],
+    queryKey: ['/api/vision/streams', id] as const,
     queryFn: () => apiRequest(`/api/vision/streams/${id}`),
     enabled: !!id,
   });
@@ -132,7 +126,7 @@ export function useProcessFrame() {
 // Analysis History
 export function useVisionAnalyses(limit: number = 20) {
   return useQuery({
-    queryKey: ['/api/vision/analyses', { limit }],
+    queryKey: ['/api/vision/analyses', { limit }] as const,
     queryFn: () => apiRequest(`/api/vision/analyses?limit=${limit}`),
     retry: false,
     refetchOnMount: false,
@@ -143,7 +137,7 @@ export function useVisionAnalyses(limit: number = 20) {
 
 export function useVisionAnalysis(id: string) {
   return useQuery({
-    queryKey: ['/api/vision/analyses', id],
+    queryKey: ['/api/vision/analyses', id] as const,
     queryFn: () => apiRequest(`/api/vision/analyses/${id}`),
     enabled: !!id,
   });
@@ -152,7 +146,7 @@ export function useVisionAnalysis(id: string) {
 // Platform Health
 export function usePlatformHealth() {
   return useQuery({
-    queryKey: ['/api/health'],
+    queryKey: ['/api/health'] as const,
     queryFn: () => apiRequest('/api/health'),
     retry: 1,
     refetchOnMount: true,

@@ -75,7 +75,38 @@ export type InsertVisionStream = z.infer<typeof insertVisionStreamSchema>;
 export type VisionAnalysis = typeof visionAnalyses.$inferSelect;
 export type InsertVisionAnalysis = z.infer<typeof insertVisionAnalysisSchema>;
 
-// Vertex AI Vision Platform types
+// Additional types for Vertex AI Vision platform
+export interface VisionPlatformRequest {
+  applicationId: string;
+  streamId: string;
+  frameData: string;
+  models: string[];
+}
+
+export interface VisionPlatformResponse {
+  id: string;
+  timestamp: string;
+  confidence: number;
+  processingTime: number;
+  detections: any[];
+  applicationId: string;
+  streamId: string;
+}
+
+export interface VertexAIVisionApplicationConfig {
+  name: string;
+  displayName: string;
+  location: string;
+  models: string[];
+}
+
+export interface VertexAIVisionStreamConfig {
+  name: string;
+  displayName: string;
+  applicationId: string;
+  sourceType: string;
+  sourceUri?: string;
+}
 export interface VertexAIVisionApplicationConfig {
   name: string;
   displayName: string;
