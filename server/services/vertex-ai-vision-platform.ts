@@ -274,6 +274,16 @@ export class VertexAIVisionPlatformService {
             detections.push(...ppeData);
             break;
             
+          case 'TEXT_DETECTION':
+            const textData = await this.runTextDetection(imageBuffer);
+            detections.push(...textData);
+            break;
+            
+          case 'LOGO_DETECTION':
+            const logoData = await this.runLogoDetection(imageBuffer);
+            detections.push(...logoData);
+            break;
+            
           default:
             console.warn(`Unsupported Vertex AI Vision model: ${model}`);
         }
@@ -291,20 +301,26 @@ export class VertexAIVisionPlatformService {
     try {
       const headers = await this.getAuthHeaders();
       
-      // Use Vertex AI Vision object detection model
+      // Use Google Cloud Vision API for object localization with bounding boxes
       const request = {
-        instances: [{
+        requests: [{
           image: {
-            imageBytes: imageBuffer.toString('base64')
-          }
-        }],
-        parameters: {
-          confidenceThreshold: 0.5,
-          maxPredictions: 20
-        }
+            content: imageBuffer.toString('base64')
+          },
+          features: [
+            {
+              type: 'OBJECT_LOCALIZATION',
+              maxResults: 20
+            },
+            {
+              type: 'LABEL_DETECTION', 
+              maxResults: 10
+            }
+          ]
+        }]
       };
       
-      const endpoint = `${this.aiPlatformBaseUrl}/publishers/google/models/imageobjectdetection@1:predict`;
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -312,11 +328,13 @@ export class VertexAIVisionPlatformService {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Vision API response: ${errorText}`);
         throw new Error(`Object detection failed: ${response.statusText}`);
       }
       
       const data = await response.json();
-      return this.parseObjectDetections(data);
+      return this.parseVisionAPIResponse(data);
       
     } catch (error) {
       console.error('Vertex AI object detection error:', error);
@@ -329,19 +347,18 @@ export class VertexAIVisionPlatformService {
       const headers = await this.getAuthHeaders();
       
       const request = {
-        instances: [{
+        requests: [{
           image: {
-            imageBytes: imageBuffer.toString('base64')
-          }
-        }],
-        parameters: {
-          maxFaces: 10,
-          includeLandmarks: true,
-          includeAttributes: true
-        }
+            content: imageBuffer.toString('base64')
+          },
+          features: [{
+            type: 'FACE_DETECTION',
+            maxResults: 10
+          }]
+        }]
       };
       
-      const endpoint = `${this.aiPlatformBaseUrl}/publishers/google/models/facedetection@1:predict`;
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -349,11 +366,13 @@ export class VertexAIVisionPlatformService {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Vision API response: ${errorText}`);
         throw new Error(`Face detection failed: ${response.statusText}`);
       }
       
       const data = await response.json();
-      return this.parseFaceDetections(data);
+      return this.parseVisionAPIFaceResponse(data);
       
     } catch (error) {
       console.error('Vertex AI face detection error:', error);
@@ -363,28 +382,24 @@ export class VertexAIVisionPlatformService {
 
   private async runOccupancyAnalytics(imageBuffer: Buffer): Promise<any[]> {
     try {
+      // Use person detection from Vision API to estimate occupancy
       const headers = await this.getAuthHeaders();
       
-      // Use specialized Vertex AI Vision occupancy analytics
       const request = {
-        instances: [{
+        requests: [{
           image: {
-            imageBytes: imageBuffer.toString('base64')
-          }
-        }],
-        parameters: {
-          activeZone: {
-            normalizedVertices: [
-              { x: 0.0, y: 0.0 },
-              { x: 1.0, y: 0.0 },
-              { x: 1.0, y: 1.0 },
-              { x: 0.0, y: 1.0 }
-            ]
-          }
-        }
+            content: imageBuffer.toString('base64')
+          },
+          features: [
+            {
+              type: 'OBJECT_LOCALIZATION',
+              maxResults: 50  // Higher limit to catch all people
+            }
+          ]
+        }]
       };
       
-      const endpoint = `${this.aiPlatformBaseUrl}/publishers/google/models/occupancy-analytics@1:predict`;
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -396,7 +411,7 @@ export class VertexAIVisionPlatformService {
       }
       
       const data = await response.json();
-      return this.parseOccupancyData(data);
+      return this.parseOccupancyFromObjects(data);
       
     } catch (error) {
       console.error('Vertex AI occupancy analytics error:', error);
@@ -442,21 +457,22 @@ export class VertexAIVisionPlatformService {
 
   private async runPPEDetection(imageBuffer: Buffer): Promise<any[]> {
     try {
+      // Use object detection to identify safety equipment
       const headers = await this.getAuthHeaders();
       
       const request = {
-        instances: [{
+        requests: [{
           image: {
-            imageBytes: imageBuffer.toString('base64')
-          }
-        }],
-        parameters: {
-          confidenceThreshold: 0.7,
-          ppeTypes: ['HARD_HAT', 'SAFETY_VEST', 'SAFETY_GLASSES', 'GLOVES']
-        }
+            content: imageBuffer.toString('base64')
+          },
+          features: [{
+            type: 'OBJECT_LOCALIZATION',
+            maxResults: 20
+          }]
+        }]
       };
       
-      const endpoint = `${this.aiPlatformBaseUrl}/publishers/google/models/ppe-detection@1:predict`;
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -468,7 +484,7 @@ export class VertexAIVisionPlatformService {
       }
       
       const data = await response.json();
-      return this.parsePPEDetections(data);
+      return this.parsePPEFromObjects(data);
       
     } catch (error) {
       console.error('Vertex AI PPE detection error:', error);
@@ -476,25 +492,175 @@ export class VertexAIVisionPlatformService {
     }
   }
 
-  // Parsing methods for different detection types
-  private parseObjectDetections(data: any): any[] {
-    if (!data.predictions || !Array.isArray(data.predictions)) return [];
-    
-    return data.predictions.flatMap((prediction: any) => {
-      if (!prediction.displayNames || !prediction.confidences || !prediction.bboxes) return [];
+  private async runTextDetection(imageBuffer: Buffer): Promise<any[]> {
+    try {
+      const headers = await this.getAuthHeaders();
       
-      return prediction.displayNames.map((name: string, index: number) => ({
-        type: 'OBJECT_DETECTION',
-        label: name,
-        confidence: prediction.confidences[index],
-        bbox: {
-          left: prediction.bboxes[index][0],
-          top: prediction.bboxes[index][1],
-          right: prediction.bboxes[index][2],
-          bottom: prediction.bboxes[index][3]
-        }
-      }));
+      const request = {
+        requests: [{
+          image: {
+            content: imageBuffer.toString('base64')
+          },
+          features: [{
+            type: 'TEXT_DETECTION',
+            maxResults: 50
+          }]
+        }]
+      };
+      
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Text detection failed: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      return this.parseTextDetections(data);
+      
+    } catch (error) {
+      console.error('Text detection error:', error);
+      return [];
+    }
+  }
+
+  private async runLogoDetection(imageBuffer: Buffer): Promise<any[]> {
+    try {
+      const headers = await this.getAuthHeaders();
+      
+      const request = {
+        requests: [{
+          image: {
+            content: imageBuffer.toString('base64')
+          },
+          features: [{
+            type: 'LOGO_DETECTION',
+            maxResults: 10
+          }]
+        }]
+      };
+      
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Logo detection failed: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      return this.parseLogoDetections(data);
+      
+    } catch (error) {
+      console.error('Logo detection error:', error);
+      return [];
+    }
+  }
+
+  // Enhanced parsing methods for Vision API responses with detailed bounding boxes
+  private parseVisionAPIResponse(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+    
+    const detections: any[] = [];
+    
+    data.responses.forEach((response: any) => {
+      // Parse object localizations with precise bounding boxes
+      if (response.localizedObjectAnnotations) {
+        response.localizedObjectAnnotations.forEach((obj: any) => {
+          const vertices = obj.boundingPoly?.normalizedVertices || [];
+          if (vertices.length >= 4) {
+            detections.push({
+              type: 'OBJECT_DETECTION',
+              label: obj.name || 'Object',
+              confidence: obj.score || 0.5,
+              bbox: {
+                left: vertices[0].x || 0,
+                top: vertices[0].y || 0,
+                right: vertices[2].x || 0,
+                bottom: vertices[2].y || 0
+              },
+              boundingPoly: {
+                normalizedVertices: vertices
+              }
+            });
+          }
+        });
+      }
+      
+      // Parse label detections for additional context
+      if (response.labelAnnotations) {
+        response.labelAnnotations.slice(0, 5).forEach((label: any) => {
+          detections.push({
+            type: 'LABEL_DETECTION',
+            label: label.description || 'Label',
+            confidence: label.score || 0.5,
+            topicality: label.topicality || 0
+          });
+        });
+      }
     });
+    
+    return detections;
+  }
+
+  private parseVisionAPIFaceResponse(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+    
+    const detections: any[] = [];
+    
+    data.responses.forEach((response: any) => {
+      if (response.faceAnnotations) {
+        response.faceAnnotations.forEach((face: any) => {
+          const vertices = face.boundingPoly?.vertices || [];
+          if (vertices.length >= 4) {
+            detections.push({
+              type: 'FACE_DETECTION',
+              label: 'Face',
+              confidence: face.detectionConfidence || 0.8,
+              bbox: {
+                left: vertices[0].x || 0,
+                top: vertices[0].y || 0,
+                right: vertices[2].x || 0,
+                bottom: vertices[2].y || 0
+              },
+              boundingPoly: {
+                vertices: vertices
+              },
+              emotions: {
+                joy: this.getLikelihoodScore(face.joyLikelihood),
+                sorrow: this.getLikelihoodScore(face.sorrowLikelihood),
+                anger: this.getLikelihoodScore(face.angerLikelihood),
+                surprise: this.getLikelihoodScore(face.surpriseLikelihood)
+              },
+              landmarks: face.landmarks?.map((landmark: any) => ({
+                type: landmark.type,
+                position: landmark.position
+              })) || []
+            });
+          }
+        });
+      }
+    });
+    
+    return detections;
+  }
+
+  private getLikelihoodScore(likelihood: string): number {
+    const scores = {
+      'VERY_UNLIKELY': 0.1,
+      'UNLIKELY': 0.3,
+      'POSSIBLE': 0.5,
+      'LIKELY': 0.7,
+      'VERY_LIKELY': 0.9
+    };
+    return scores[likelihood as keyof typeof scores] || 0.5;
   }
 
   private parseFaceDetections(data: any): any[] {
@@ -523,17 +689,46 @@ export class VertexAIVisionPlatformService {
     });
   }
 
-  private parseOccupancyData(data: any): any[] {
-    if (!data.predictions || !Array.isArray(data.predictions)) return [];
+  private parseOccupancyFromObjects(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
     
-    return data.predictions.map((prediction: any) => ({
+    let personCount = 0;
+    const personDetections: any[] = [];
+    
+    data.responses.forEach((response: any) => {
+      if (response.localizedObjectAnnotations) {
+        response.localizedObjectAnnotations.forEach((obj: any) => {
+          if (obj.name === 'Person' && obj.score > 0.5) {
+            personCount++;
+            const vertices = obj.boundingPoly?.normalizedVertices || [];
+            if (vertices.length >= 4) {
+              personDetections.push({
+                type: 'PERSON_DETECTION',
+                label: 'Person',
+                confidence: obj.score,
+                bbox: {
+                  left: vertices[0].x || 0,
+                  top: vertices[0].y || 0,
+                  right: vertices[2].x || 0,
+                  bottom: vertices[2].y || 0
+                }
+              });
+            }
+          }
+        });
+      }
+    });
+    
+    // Add occupancy summary
+    const occupancyData = [{
       type: 'OCCUPANCY_COUNT',
-      label: 'Occupancy',
+      label: `Occupancy: ${personCount} people`,
       confidence: 0.9,
-      count: prediction.personCount || 0,
-      dwellTime: prediction.dwellTime || 0,
-      activeZone: prediction.activeZone
-    }));
+      count: personCount,
+      density: personCount > 10 ? 'High' : personCount > 5 ? 'Medium' : 'Low'
+    }];
+    
+    return [...occupancyData, ...personDetections];
   }
 
   private parsePersonDetections(data: any): any[] {
@@ -557,26 +752,102 @@ export class VertexAIVisionPlatformService {
     });
   }
 
-  private parsePPEDetections(data: any): any[] {
-    if (!data.predictions || !Array.isArray(data.predictions)) return [];
+  private parsePPEFromObjects(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
     
-    return data.predictions.flatMap((prediction: any) => {
-      if (!prediction.ppeDetections) return [];
-      
-      return prediction.ppeDetections.map((ppe: any) => ({
-        type: 'PPE_DETECTION',
-        label: ppe.ppeType || 'PPE',
-        confidence: ppe.confidence || 0.7,
-        bbox: {
-          left: ppe.bbox?.[0] || 0,
-          top: ppe.bbox?.[1] || 0,
-          right: ppe.bbox?.[2] || 0,
-          bottom: ppe.bbox?.[3] || 0
-        },
-        ppeType: ppe.ppeType,
-        isCompliant: ppe.isCompliant
-      }));
+    const ppeItems: any[] = [];
+    const safetyKeywords = ['helmet', 'hard hat', 'safety vest', 'gloves', 'goggles', 'mask'];
+    
+    data.responses.forEach((response: any) => {
+      if (response.localizedObjectAnnotations) {
+        response.localizedObjectAnnotations.forEach((obj: any) => {
+          const objName = (obj.name || '').toLowerCase();
+          const isPPE = safetyKeywords.some(keyword => objName.includes(keyword));
+          
+          if (isPPE && obj.score > 0.5) {
+            const vertices = obj.boundingPoly?.normalizedVertices || [];
+            if (vertices.length >= 4) {
+              ppeItems.push({
+                type: 'PPE_DETECTION',
+                label: `Safety Equipment: ${obj.name}`,
+                confidence: obj.score,
+                bbox: {
+                  left: vertices[0].x || 0,
+                  top: vertices[0].y || 0,
+                  right: vertices[2].x || 0,
+                  bottom: vertices[2].y || 0
+                },
+                ppeType: obj.name,
+                isCompliant: true
+              });
+            }
+          }
+        });
+      }
     });
+    
+    return ppeItems;
+  }
+
+  private parseTextDetections(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+    
+    const textDetections: any[] = [];
+    
+    data.responses.forEach((response: any) => {
+      if (response.textAnnotations) {
+        response.textAnnotations.slice(1).forEach((text: any) => { // Skip first full text annotation
+          const vertices = text.boundingPoly?.vertices || [];
+          if (vertices.length >= 4 && text.description) {
+            textDetections.push({
+              type: 'TEXT_DETECTION',
+              label: text.description,
+              confidence: 0.9,
+              bbox: {
+                left: vertices[0].x || 0,
+                top: vertices[0].y || 0,
+                right: vertices[2].x || 0,
+                bottom: vertices[2].y || 0
+              },
+              text: text.description,
+              locale: text.locale || 'en'
+            });
+          }
+        });
+      }
+    });
+    
+    return textDetections;
+  }
+
+  private parseLogoDetections(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+    
+    const logoDetections: any[] = [];
+    
+    data.responses.forEach((response: any) => {
+      if (response.logoAnnotations) {
+        response.logoAnnotations.forEach((logo: any) => {
+          const vertices = logo.boundingPoly?.vertices || [];
+          if (vertices.length >= 4) {
+            logoDetections.push({
+              type: 'LOGO_DETECTION',
+              label: `Logo: ${logo.description}`,
+              confidence: logo.score || 0.8,
+              bbox: {
+                left: vertices[0].x || 0,
+                top: vertices[0].y || 0,
+                right: vertices[2].x || 0,
+                bottom: vertices[2].y || 0
+              },
+              logoName: logo.description
+            });
+          }
+        });
+      }
+    });
+    
+    return logoDetections;
   }
 
   private getNodeConfigForModel(model: string): any {

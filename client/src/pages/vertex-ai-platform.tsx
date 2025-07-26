@@ -9,9 +9,11 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
-import { AlertCircle, CheckCircle, Clock, Camera, Play, Square, Settings, Zap, Activity, Eye, Cpu, Upload } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertCircle, CheckCircle, Clock, Camera, Play, Square, Settings, Zap, Activity, Eye, Cpu, Upload, Type, Image } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCamera } from '@/hooks/use-camera';
+import { BoundingBoxOverlay } from '@/components/BoundingBoxOverlay';
 import {
   useVisionApplications,
   useCreateVisionApplication,
@@ -23,8 +25,18 @@ import {
 } from '@/hooks/use-vertex-ai-platform';
 
 const AVAILABLE_MODELS = [
+  { value: 'OBJECT_DETECTION', label: 'Object Detection', icon: Eye, description: 'Detect and locate objects with bounding boxes' },
+  { value: 'FACE_DETECTION', label: 'Face Detection', icon: Camera, description: 'Detect faces with emotion analysis' },
+  { value: 'TEXT_DETECTION', label: 'Text Detection (OCR)', icon: Type, description: 'Extract text from images with bounding boxes' },
+  { value: 'LOGO_DETECTION', label: 'Logo Detection', icon: Image, description: 'Identify brand logos and corporate symbols' },
+  { value: 'OCCUPANCY_COUNTING', label: 'Occupancy Analytics', icon: Activity, description: 'Count people and analyze space utilization' },
+  { value: 'PPE_DETECTION', label: 'PPE Detection', icon: Zap, description: 'Identify safety equipment and compliance' },
+  { value: 'PERSON_DETECTION', label: 'Person Detection', icon: Eye, description: 'Specialized person detection and tracking' }
+];
+
+const PROCESSING_MODELS = [
   'GENERAL_OBJECT_DETECTION',
-  'OCCUPANCY_COUNTING',
+  'OCCUPANCY_COUNTING', 
   'PERSON_BLUR',
   'VERTEX_CUSTOM_MODEL'
 ];
@@ -53,6 +65,10 @@ export default function VertexAIPlatform() {
   const [newAppDisplayName, setNewAppDisplayName] = useState('');
   const [newAppLocation, setNewAppLocation] = useState('us-central1');
   const [newAppModels, setNewAppModels] = useState<string[]>(['GENERAL_OBJECT_DETECTION']);
+  
+  // Frame processing settings
+  const [selectedModels, setSelectedModels] = useState<string[]>(['OBJECT_DETECTION', 'FACE_DETECTION']);
+  const [lastProcessingResult, setLastProcessingResult] = useState<any>(null);
   
   // New stream form
   const [newStreamName, setNewStreamName] = useState('');
@@ -186,12 +202,16 @@ export default function VertexAIPlatform() {
 
       setLastProcessedFrame(frameData);
 
-      await processFrame.mutateAsync({
+      const result = await processFrame.mutateAsync({
         applicationId: selectedApplication,
         streamId: selectedStream || 'default-stream',
         frameData,
-        models: newAppModels,
+        models: selectedModels,
       });
+
+      if (result) {
+        setLastProcessingResult(result);
+      }
       
       const processingTime = Date.now() - startTime;
       setProcessingStats(prev => ({
@@ -342,7 +362,7 @@ export default function VertexAIPlatform() {
                   <div className="space-y-2">
                     <Label>Models</Label>
                     <div className="flex flex-wrap gap-2">
-                      {AVAILABLE_MODELS.map(model => (
+                      {PROCESSING_MODELS.map(model => (
                         <Badge
                           key={model}
                           variant={newAppModels.includes(model) ? 'default' : 'outline'}
@@ -564,6 +584,51 @@ export default function VertexAIPlatform() {
                       {cameraError}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              {/* Vision Models Selection */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Eye className="w-4 h-4 mr-2" />
+                    Vision Models
+                  </CardTitle>
+                  <CardDescription>
+                    Select which AI models to run
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {AVAILABLE_MODELS.map(model => {
+                    const Icon = model.icon;
+                    const isSelected = selectedModels.includes(model.value);
+                    
+                    return (
+                      <div
+                        key={model.value}
+                        className={`flex items-start space-x-3 p-2 rounded-lg border cursor-pointer transition-colors ${
+                          isSelected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'
+                        }`}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedModels(prev => prev.filter(m => m !== model.value));
+                          } else {
+                            setSelectedModels(prev => [...prev, model.value]);
+                          }
+                        }}
+                      >
+                        <Checkbox checked={isSelected} readOnly />
+                        <Icon className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                        <div className="flex-1 space-y-1">
+                          <div className="font-medium text-xs">{model.label}</div>
+                          <div className="text-xs text-muted-foreground">{model.description}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="text-xs text-muted-foreground text-center pt-2 border-t">
+                    {selectedModels.length} model{selectedModels.length !== 1 ? 's' : ''} selected
+                  </div>
                 </CardContent>
               </Card>
 
