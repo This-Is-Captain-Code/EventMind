@@ -10,10 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertCircle, CheckCircle, Clock, Camera, Play, Square, Settings, Zap, Activity, Eye, Cpu, Upload, Type, Image } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Camera, Play, Square, Settings, Zap, Activity, Eye, Cpu, Upload, Type, Image, Brain } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCamera } from '@/hooks/use-camera';
 import { BoundingBoxOverlay } from '@/components/BoundingBoxOverlay';
+import { IncidentAnalysisPrompt } from '@/components/IncidentAnalysisPrompt';
 import {
   useVisionApplications,
   useCreateVisionApplication,
@@ -289,7 +290,7 @@ export default function VertexAIPlatform() {
       </div>
 
       <Tabs defaultValue="camera" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="camera">
             <Camera className="w-4 h-4 mr-2" />
             Live Camera
@@ -297,6 +298,10 @@ export default function VertexAIPlatform() {
           <TabsTrigger value="analysis">
             <Activity className="w-4 h-4 mr-2" />
             Analysis
+          </TabsTrigger>
+          <TabsTrigger value="ai-analysis">
+            <Brain className="w-4 h-4 mr-2" />
+            AI Analysis
           </TabsTrigger>
           <TabsTrigger value="setup">
             <Settings className="w-4 h-4 mr-2" />
@@ -1012,6 +1017,11 @@ export default function VertexAIPlatform() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* AI Analysis Tab */}
+        <TabsContent value="ai-analysis" className="space-y-6">
+          <IncidentAnalysisPrompt />
         </TabsContent>
 
         {/* History Tab */}

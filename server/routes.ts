@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { VertexAIVisionPlatformService } from "./services/vertex-ai-vision-platform";
 import { incidentTracker } from "./services/incident-tracker";
 import { directIncidentRecorder } from "./services/direct-incident-recorder";
+import { geminiAnalyzer } from "./services/gemini-incident-analyzer";
 
 import { z } from "zod";
 
@@ -259,6 +260,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error acknowledging incident:', error);
       res.status(500).json({ 
         error: 'Failed to acknowledge incident',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Gemini AI Incident Analysis Endpoint
+  app.post("/api/incidents/analyze", async (req, res) => {
+    try {
+      const { prompt } = req.body;
+      
+      if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({ error: 'Prompt is required and must be a string' });
+      }
+
+      const analysis = await geminiAnalyzer.analyzeWithPrompt(prompt);
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error in incident analysis:', error);
+      res.status(500).json({ 
+        error: 'Failed to analyze incidents',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
