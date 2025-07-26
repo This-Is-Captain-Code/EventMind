@@ -310,15 +310,16 @@ export class VertexAIVisionPlatformService {
       // Process each requested model using Vertex AI Vision platform
       for (const model of models) {
         switch (model) {
-          case 'OBJECT_DETECTION':
-          case 'GENERAL_OBJECT_DETECTION':
-            const allObjectDetections = await this.runObjectDetection(imageBuffer);
+          case "OBJECT_DETECTION":
+          case "GENERAL_OBJECT_DETECTION":
+            const allObjectDetections =
+              await this.runObjectDetection(imageBuffer);
             detections.push(...allObjectDetections);
             break;
           case "PERSON_DETECTION":
             const objectDetections = await this.runObjectDetection(imageBuffer);
             const personDetections = objectDetections.filter(
-              (d) => d.label === "Person",
+              (d) => d.label === "Person" || d.label === "person",
             );
             detections.push(...personDetections);
             break;
@@ -682,7 +683,10 @@ export class VertexAIVisionPlatformService {
   }
 
   // Enhanced parsing methods for Google Cloud Vision API responses with detailed bounding boxes
-  private parseVisionAPIObjectResponse(data: any, filterPersonsOnly: boolean = false): any[] {
+  private parseVisionAPIObjectResponse(
+    data: any,
+    filterPersonsOnly: boolean = false,
+  ): any[] {
     if (!data.responses || !Array.isArray(data.responses)) return [];
 
     const detections: any[] = [];
@@ -696,7 +700,7 @@ export class VertexAIVisionPlatformService {
             if (filterPersonsOnly && obj.name !== "Person") {
               return; // Skip non-person objects
             }
-            
+
             // Calculate bounding box from all vertices for accurate positioning
             const minX = Math.min(...vertices.map((v: any) => v.x || 0));
             const minY = Math.min(...vertices.map((v: any) => v.y || 0));
