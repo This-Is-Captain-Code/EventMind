@@ -108,12 +108,45 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
       bottom: Math.max(0, Math.min(1, bbox.bottom))
     };
 
-    // Convert normalized coordinates to percentage for CSS positioning
-    // Apply slight offset adjustments for better alignment
-    const left = bbox.left * 100;
-    const top = bbox.top * 100; 
-    const width = (bbox.right - bbox.left) * 100;
-    const height = (bbox.bottom - bbox.top) * 100;
+    // FIXED: Account for video aspect ratio scaling and centering
+    // The video has aspect-video class which maintains 16:9 ratio
+    // From console log: videoWidth:1280, videoHeight:720, displayWidth:426, displayHeight:240
+    const videoAspectRatio = videoWidth / videoHeight; // ~1.78 (16:9)
+    const displayAspectRatio = 16 / 9; // 1.78
+    
+    let adjustedBbox = bbox;
+    
+    // Since video is object-cover, it might be cropped to fit display area
+    // We need to account for the scaling and centering
+    if (Math.abs(videoAspectRatio - displayAspectRatio) > 0.01) {
+      if (videoAspectRatio > displayAspectRatio) {
+        // Video is wider - letterboxed (black bars top/bottom)
+        const scale = displayAspectRatio / videoAspectRatio;
+        const offset = (1 - scale) / 2;
+        adjustedBbox = {
+          left: bbox.left,
+          top: bbox.top * scale + offset,
+          right: bbox.right,
+          bottom: bbox.bottom * scale + offset
+        };
+      } else {
+        // Video is taller - pillarboxed (black bars left/right)  
+        const scale = videoAspectRatio / displayAspectRatio;
+        const offset = (1 - scale) / 2;
+        adjustedBbox = {
+          left: bbox.left * scale + offset,
+          top: bbox.top,
+          right: bbox.right * scale + offset,
+          bottom: bbox.bottom
+        };
+      }
+    }
+
+    // Convert adjusted coordinates to percentage for CSS positioning
+    const left = adjustedBbox.left * 100;
+    const top = adjustedBbox.top * 100; 
+    const width = (adjustedBbox.right - adjustedBbox.left) * 100;
+    const height = (adjustedBbox.bottom - adjustedBbox.top) * 100;
 
     // Skip invalid bounding boxes
     if (width <= 0 || height <= 0) {
@@ -122,12 +155,14 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
     }
 
     // Debug logging for alignment troubleshooting
-    if (detection.type === 'PERSON_DETECTION') {
-      console.log(`Person detection:`, { 
+    if (detection.type === 'PERSON_DETECTION' || detection.type === 'FACE_DETECTION') {
+      console.log(`${detection.type} alignment debug:`, { 
         originalBbox: detection.bbox,
         normalizedBbox: bbox,
+        adjustedBbox,
         cssPercent: { left: left.toFixed(1), top: top.toFixed(1), width: width.toFixed(1), height: height.toFixed(1) },
-        videoSize: { videoWidth, videoHeight }
+        videoSize: { videoWidth, videoHeight },
+        aspectRatios: { videoAspectRatio: videoAspectRatio.toFixed(3), displayAspectRatio: displayAspectRatio.toFixed(3) }
       });
     }
 
