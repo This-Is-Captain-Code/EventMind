@@ -24,6 +24,13 @@ interface Detection {
   text?: string;
   logoName?: string;
   ppeType?: string;
+  // Enhanced occupancy data properties
+  count?: number;
+  density?: string;
+  densityColor?: string;
+  densityDescription?: string;
+  displayText?: string;
+  style?: React.CSSProperties;
 }
 
 interface BoundingBoxOverlayProps {
@@ -168,6 +175,46 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
 
     const colorClass = getColorForType(detection.type);
     const badgeColor = getBadgeColorForType(detection.type);
+
+    // Special handling for occupancy count display with enhanced density visualization
+    if (detection.type === 'OCCUPANCY_COUNT') {
+      return (
+        <div key={`${detection.type}-${index}`} className="absolute pointer-events-none">
+          {/* Enhanced occupancy density display */}
+          <div
+            className="absolute z-20 font-bold text-white rounded-lg shadow-lg"
+            style={{
+              left: `${left}%`,
+              top: `${top}%`,
+              backgroundColor: detection.densityColor || '#22c55e',
+              padding: '12px 16px',
+              fontSize: '18px',
+              border: `3px solid ${detection.densityColor || '#22c55e'}`,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              minWidth: '250px',
+              textAlign: 'center'
+            }}
+          >
+            <div className="flex items-center justify-center space-x-2">
+              <span className="text-2xl">👥</span>
+              <div>
+                <div className="font-extrabold text-xl">
+                  {detection.count || 0} PEOPLE
+                </div>
+                <div className="text-sm opacity-90 font-bold">
+                  {detection.density || 'LOW'} DENSITY
+                </div>
+              </div>
+            </div>
+            {detection.densityDescription && (
+              <div className="text-xs mt-2 opacity-80 bg-black bg-opacity-20 rounded px-2 py-1">
+                {detection.densityDescription}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div
