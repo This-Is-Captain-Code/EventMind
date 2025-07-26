@@ -37,6 +37,23 @@ const processFrameSchema = z.object({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Initialize storage and clear old data on startup
+  console.log('🚀 Initializing server...');
+  const removedCount = await storage.clearOldVisionAnalyses(60); // Clear data older than 1 hour
+  console.log(`✅ Server initialized - cleared ${removedCount} old analysis records`);
+  
+  // Set up periodic cleanup every 15 minutes to maintain real-time data only
+  setInterval(async () => {
+    try {
+      const cleanedCount = await storage.clearOldVisionAnalyses(60); // Clear data older than 1 hour
+      if (cleanedCount > 0) {
+        console.log(`🧹 Periodic cleanup: removed ${cleanedCount} old analysis records`);
+      }
+    } catch (error) {
+      console.error('Error during periodic cleanup:', error);
+    }
+  }, 15 * 60 * 1000); // 15 minutes
+  
   // Health check endpoint
   app.get("/api/health", async (req, res) => {
     try {
@@ -179,6 +196,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error fetching analyses:', error);
       res.status(500).json({ 
         error: error instanceof Error ? error.message : 'Failed to fetch analyses' 
+      });
+    }
+  });
+
+  // Clear all analysis data
+  app.delete("/api/vision/analyses", async (req, res) => {
+    try {
+      await storage.clearAllVisionAnalyses();
+      res.json({ message: "All analysis data cleared successfully" });
+    } catch (error) {
+      console.error('Error clearing analyses:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to clear analyses' 
+      });
+    }
+  });
+
+  // Clear old analysis data
+  app.delete("/api/vision/analyses/old", async (req, res) => {
+    try {
+      const maxAgeMinutes = parseInt(req.query.maxAge as string) || 60; // Default 1 hour
+      const removedCount = await storage.clearOldVisionAnalyses(maxAgeMinutes);
+      res.json({ 
+        message: `Cleared ${removedCount} old analysis records`,
+        removedCount,
+        maxAgeMinutes 
+      });
+    } catch (error) {
+      console.error('Error clearing old analyses:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to clear old analyses' 
       });
     }
   });

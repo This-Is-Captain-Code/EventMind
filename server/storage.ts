@@ -33,6 +33,8 @@ export interface IStorage {
   getRecentVisionAnalyses(limit: number): Promise<VisionAnalysis[]>;
   getVisionAnalysesByStream(streamId: string, limit: number): Promise<VisionAnalysis[]>;
   getVisionAnalysis(id: string): Promise<VisionAnalysis | undefined>;
+  clearAllVisionAnalyses(): Promise<void>;
+  clearOldVisionAnalyses(maxAgeMinutes: number): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
@@ -154,6 +156,27 @@ export class MemStorage implements IStorage {
 
   async getVisionAnalysis(id: string): Promise<VisionAnalysis | undefined> {
     return this.visionAnalyses.get(id);
+  }
+
+  async clearAllVisionAnalyses(): Promise<void> {
+    this.visionAnalyses.clear();
+    console.log('🗑️ Cleared all vision analysis data');
+  }
+
+  async clearOldVisionAnalyses(maxAgeMinutes: number): Promise<number> {
+    const cutoffTime = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+    const initialSize = this.visionAnalyses.size;
+    
+    // Remove old analyses
+    for (const [id, analysis] of this.visionAnalyses.entries()) {
+      if (new Date(analysis.timestamp) < cutoffTime) {
+        this.visionAnalyses.delete(id);
+      }
+    }
+    
+    const removedCount = initialSize - this.visionAnalyses.size;
+    console.log(`🗑️ Removed ${removedCount} old vision analyses (older than ${maxAgeMinutes} minutes)`);
+    return removedCount;
   }
 }
 
