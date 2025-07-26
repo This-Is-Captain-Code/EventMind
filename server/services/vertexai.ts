@@ -1,118 +1,242 @@
-import { GoogleGenAI } from '@google/genai';
-import type { VisionApiResponse, VisionApiRequest, TextDetection, ObjectDetection, FaceDetection, LogoDetection, SafeSearchAnnotation } from '@shared/schema';
+import { GoogleAuth } from 'google-auth-library';
 
-let client: GoogleGenAI | null = null;
-
-function getClient(): GoogleGenAI {
-  if (!client) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is required');
-    }
-
-    client = new GoogleGenAI({ apiKey });
-  }
-  return client;
+export interface VisionApplication {
+  name: string;
+  displayName: string;
+  location: string;
+  state: string;
+  createTime: string;
+  updateTime: string;
+  models: string[];
+  streams: VisionStream[];
 }
 
-export async function analyzeImage(request: VisionApiRequest): Promise<VisionApiResponse> {
-  const startTime = Date.now();
-  
-  try {
-    const ai = getClient();
-    
-    // Clean the base64 data
-    const imageData = request.imageData.replace(/^data:image\/[a-z]+;base64,/, '');
-    
-    // Build analysis prompt based on enabled features
-    const features = [];
-    if (request.features.textDetection) features.push('text detection (OCR)');
-    if (request.features.objectDetection) features.push('object detection');
-    if (request.features.faceDetection) features.push('face detection');
-    if (request.features.logoDetection) features.push('logo detection');
-    if (request.features.safeSearch) features.push('content safety analysis');
-
-    if (features.length === 0) {
-      throw new Error('At least one feature must be enabled');
-    }
-
-    const prompt = `Analyze this image for ${features.join(', ')}. Return a JSON response with the following structure:
-{
-  "textDetections": [{"text": "detected text", "confidence": 0.95}],
-  "objectDetections": [{"name": "object name", "confidence": 0.85}],
-  "faceDetections": [{"confidence": 0.90, "emotions": {"joy": "LIKELY", "sorrow": "UNLIKELY", "anger": "UNLIKELY", "surprise": "UNLIKELY"}}],
-  "logoDetections": [{"description": "brand name", "confidence": 0.80}],
-  "safeSearchAnnotation": {"adult": "UNLIKELY", "spoof": "VERY_UNLIKELY", "medical": "UNLIKELY", "violence": "UNLIKELY", "racy": "UNLIKELY", "overall": "SAFE"}
+export interface VisionStream {
+  name: string;
+  displayName: string;
+  sourceType: string;
+  state: string;
+  createTime: string;
+  updateTime: string;
 }
 
-Only include arrays for enabled features. Use confidence values between 0 and 1. For emotions and safety, use: VERY_UNLIKELY, UNLIKELY, POSSIBLE, LIKELY, VERY_LIKELY.`;
+export interface VisionAnalysis {
+  id: string;
+  timestamp: string;
+  confidence: number;
+  processingTime: number;
+  detections: any[];
+  applicationId: string;
+  streamId: string;
+}
 
-    const contents = [
-      {
-        inlineData: {
-          data: imageData,
-          mimeType: "image/jpeg",
-        },
-      },
-      prompt,
-    ];
+export class VertexAIVisionService {
+  private auth: GoogleAuth;
+  private projectId: string;
+  private baseUrl: string;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      contents: contents,
-      config: {
-        responseMimeType: "application/json",
-      },
+  constructor() {
+    this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || 'agenticai-466913';
+    this.auth = new GoogleAuth({
+      keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
     });
+    this.baseUrl = `https://visionai.googleapis.com/v1/projects/${this.projectId}/locations`;
+  }
 
-    const processingTime = Date.now() - startTime;
-    
-    if (!response.text) {
-      throw new Error('Empty response from Gemini API');
+  private async getAuthHeaders() {
+    const client = await this.auth.getClient();
+    const accessToken = await client.getAccessToken();
+    return {
+      'Authorization': `Bearer ${accessToken.token}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  async listApplications(location: string = 'us-central1'): Promise<VisionApplication[]> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(
+        `${this.baseUrl}/${location}/applications`,
+        { headers }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to list applications: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.applications || [];
+    } catch (error) {
+      console.error('Error listing applications:', error);
+      return [];
     }
+  }
 
-    const result = JSON.parse(response.text);
+  async createApplication(data: {
+    name: string;
+    displayName: string;
+    location?: string;
+    models?: string[];
+  }): Promise<VisionApplication> {
+    const location = data.location || 'us-central1';
+    const headers = await this.getAuthHeaders();
 
-    // Ensure proper structure with defaults
-    const visionResponse: VisionApiResponse = {
-      textDetections: result.textDetections || [],
-      objectDetections: result.objectDetections || [],
-      faceDetections: result.faceDetections || [],
-      logoDetections: result.logoDetections || [],
-      safeSearchAnnotation: result.safeSearchAnnotation || {
-        adult: 'UNKNOWN',
-        spoof: 'UNKNOWN',
-        medical: 'UNKNOWN',
-        violence: 'UNKNOWN',
-        racy: 'UNKNOWN',
-        overall: 'SAFE',
-      },
-      processingTime,
+    const applicationData = {
+      displayName: data.displayName,
+      models: data.models || ['GENERAL_OBJECT_DETECTION'],
     };
 
-    // Determine overall safety if not provided
-    if (visionResponse.safeSearchAnnotation && !visionResponse.safeSearchAnnotation.overall) {
-      const riskLevels = ['VERY_UNLIKELY', 'UNLIKELY', 'POSSIBLE', 'LIKELY', 'VERY_LIKELY'];
-      const maxRiskIndex = Math.max(
-        riskLevels.indexOf(visionResponse.safeSearchAnnotation.adult),
-        riskLevels.indexOf(visionResponse.safeSearchAnnotation.violence),
-        riskLevels.indexOf(visionResponse.safeSearchAnnotation.racy)
-      );
-      
-      if (maxRiskIndex >= 3) {
-        visionResponse.safeSearchAnnotation.overall = 'UNSAFE';
-      } else if (maxRiskIndex >= 2) {
-        visionResponse.safeSearchAnnotation.overall = 'MODERATE';
-      } else {
-        visionResponse.safeSearchAnnotation.overall = 'SAFE';
+    const response = await fetch(
+      `${this.baseUrl}/${location}/applications?applicationId=${data.name}`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(applicationData),
       }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create application: ${errorText}`);
     }
 
-    return visionResponse;
+    return await response.json();
+  }
 
-  } catch (error) {
-    console.error('Gemini Vision API error:', error);
-    throw new Error(`Vision API analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  async deployApplication(applicationId: string, location: string = 'us-central1'): Promise<any> {
+    const headers = await this.getAuthHeaders();
+
+    const response = await fetch(
+      `${this.baseUrl}/${location}/applications/${applicationId}:deploy`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to deploy application: ${errorText}`);
+    }
+
+    return await response.json();
+  }
+
+  async createStream(data: {
+    name: string;
+    displayName: string;
+    applicationId: string;
+    sourceType?: string;
+    sourceUri?: string;
+  }): Promise<VisionStream> {
+    const location = 'us-central1';
+    const headers = await this.getAuthHeaders();
+
+    const streamData = {
+      displayName: data.displayName,
+      sourceType: data.sourceType || 'WEBCAM',
+      sourceUri: data.sourceUri,
+    };
+
+    const response = await fetch(
+      `${this.baseUrl}/${location}/applications/${data.applicationId}/streams?streamId=${data.name}`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(streamData),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create stream: ${errorText}`);
+    }
+
+    return await response.json();
+  }
+
+  async processFrame(data: {
+    applicationId: string;
+    streamId: string;
+    frameData: string;
+    models: string[];
+  }): Promise<VisionAnalysis> {
+    const location = 'us-central1';
+    const headers = await this.getAuthHeaders();
+
+    // Convert base64 frame data to the format expected by Vertex AI Vision
+    const frameBytes = data.frameData.split(',')[1]; // Remove data:image/jpeg;base64, prefix
+
+    const analysisData = {
+      input: {
+        bytes: frameBytes,
+      },
+      models: data.models,
+    };
+
+    const response = await fetch(
+      `${this.baseUrl}/${location}/applications/${data.applicationId}/streams/${data.streamId}:analyze`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(analysisData),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to process frame: ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    return {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      confidence: 0.85, // Mock confidence for now
+      processingTime: 150, // Mock processing time
+      detections: result.detections || [],
+      applicationId: data.applicationId,
+      streamId: data.streamId,
+    };
+  }
+
+  async getHealth(): Promise<{ status: string; services: any[] }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      
+      // Test connectivity to Vertex AI Vision API
+      const response = await fetch(
+        `${this.baseUrl}`,
+        { headers }
+      );
+
+      return {
+        status: response.ok ? 'healthy' : 'unhealthy',
+        services: [
+          {
+            name: 'Vertex AI Vision API',
+            status: response.ok ? 'available' : 'unavailable',
+            lastCheck: new Date().toISOString(),
+          }
+        ],
+      };
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        services: [
+          {
+            name: 'Vertex AI Vision API',
+            status: 'error',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            lastCheck: new Date().toISOString(),
+          }
+        ],
+      };
+    }
   }
 }
+
+export const vertexAIService = new VertexAIVisionService();

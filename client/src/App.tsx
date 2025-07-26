@@ -5,11 +5,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import VisionDemo from "@/pages/vision-demo";
+import VertexAIPlatform from "@/pages/vertex-ai-platform";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={VisionDemo} />
+      <Route path="/" component={VertexAIPlatform} />
+      <Route path="/legacy" component={VisionDemo} />
       <Route component={NotFound} />
     </Switch>
   );

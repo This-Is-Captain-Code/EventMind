@@ -1,83 +1,159 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { analyzeImage } from "./services/vertexai";
-import { insertVisionAnalysisSchema, type VisionApiRequest } from "@shared/schema";
+import { vertexAIService } from "./services/vertexai";
 import { z } from "zod";
 
-const visionApiRequestSchema = z.object({
-  imageData: z.string().min(1, "Image data is required"),
-  features: z.object({
-    textDetection: z.boolean(),
-    objectDetection: z.boolean(),
-    faceDetection: z.boolean(),
-    logoDetection: z.boolean(),
-    safeSearch: z.boolean(),
-  }).refine((features) => 
-    Object.values(features).some(Boolean), 
-    "At least one feature must be enabled"
-  ),
+// Validation schemas
+const applicationConfigSchema = z.object({
+  name: z.string().min(1, "Application name is required"),
+  displayName: z.string().min(1, "Display name is required"),
+  location: z.string().default('us-central1'),
+  models: z.array(z.string()).default(['GENERAL_OBJECT_DETECTION']),
+});
+
+const streamConfigSchema = z.object({
+  name: z.string().min(1, "Stream name is required"),
+  displayName: z.string().min(1, "Display name is required"),
+  applicationId: z.string().min(1, "Application ID is required"),
+  sourceType: z.enum(['WEBCAM', 'RTMP', 'FILE']).default('WEBCAM'),
+  sourceUri: z.string().optional(),
+});
+
+const processFrameSchema = z.object({
+  applicationId: z.string().min(1, "Application ID is required"),
+  streamId: z.string().min(1, "Stream ID is required"),
+  frameData: z.string().min(1, "Frame data is required"),
+  models: z.array(z.string()).min(1, "At least one model is required"),
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Vision API analysis endpoint
-  app.post("/api/vision/analyze", async (req, res) => {
+  
+  // Health check endpoint
+  app.get("/api/health", async (req, res) => {
     try {
-      // Validate request body
-      const validatedData = visionApiRequestSchema.parse(req.body);
-      
-      // Analyze image with Vertex AI
-      const analysisResult = await analyzeImage(validatedData as VisionApiRequest);
-      
-      // Store analysis result
-      const storedAnalysis = await storage.createVisionAnalysis({
-        imageData: validatedData.imageData,
-        textDetections: analysisResult.textDetections,
-        objectDetections: analysisResult.objectDetections,
-        faceDetections: analysisResult.faceDetections,
-        logoDetections: analysisResult.logoDetections,
-        safeSearchAnnotation: analysisResult.safeSearchAnnotation,
-        processingTime: analysisResult.processingTime,
-      });
-      
-      res.json(analysisResult);
+      const health = await vertexAIService.getHealth();
+      res.json(health);
     } catch (error) {
-      console.error("Vision analysis error:", error);
+      res.status(500).json({ 
+        status: 'error', 
+        message: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  // Vision Application Management
+  app.get("/api/vision/applications", async (req, res) => {
+    try {
+      const applications = await vertexAIService.listApplications();
+      res.json(applications);
+    } catch (error) {
+      console.error('Error listing applications:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to list applications' 
+      });
+    }
+  });
+
+  app.post("/api/vision/applications", async (req, res) => {
+    try {
+      const validatedData = applicationConfigSchema.parse(req.body);
       
+      // Create application in Vertex AI Vision platform
+      const application = await vertexAIService.createApplication(validatedData);
+      
+      res.json({ 
+        ...application,
+        message: "Application created successfully. Add streams before deploying." 
+      });
+    } catch (error) {
+      console.error('Error creating application:', error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ 
-          message: "Invalid request data", 
-          errors: error.errors 
+        res.status(400).json({ error: "Validation failed", details: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : 'Failed to create application' 
         });
       }
+    }
+  });
+
+  app.post("/api/vision/applications/:id/deploy", async (req, res) => {
+    try {
+      const applicationId = req.params.id;
+      const result = await vertexAIService.deployApplication(applicationId);
       
+      res.json({ 
+        ...result,
+        message: "Application deployment initiated successfully." 
+      });
+    } catch (error) {
+      console.error('Error deploying application:', error);
       res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Internal server error" 
+        error: error instanceof Error ? error.message : 'Failed to deploy application' 
       });
     }
   });
 
-  // Get recent vision analyses
+  // Vision Stream Management
+  app.post("/api/vision/streams", async (req, res) => {
+    try {
+      const validatedData = streamConfigSchema.parse(req.body);
+      
+      // Create stream in Vertex AI Vision platform
+      const stream = await vertexAIService.createStream(validatedData);
+      
+      res.json({ 
+        ...stream,
+        message: "Stream created successfully." 
+      });
+    } catch (error) {
+      console.error('Error creating stream:', error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Validation failed", details: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : 'Failed to create stream' 
+        });
+      }
+    }
+  });
+
+  // Frame Processing
+  app.post("/api/vision/process-frame", async (req, res) => {
+    try {
+      const validatedData = processFrameSchema.parse(req.body);
+      
+      // Process frame with Vertex AI Vision platform
+      const analysis = await vertexAIService.processFrame(validatedData);
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error processing frame:', error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Validation failed", details: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : 'Failed to process frame' 
+        });
+      }
+    }
+  });
+
+  // Analysis History
   app.get("/api/vision/analyses", async (req, res) => {
     try {
-      const limit = parseInt(req.query.limit as string) || 10;
-      const analyses = await storage.getRecentVisionAnalyses(limit);
-      res.json(analyses);
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      // For now, return empty array as we're not storing analysis history
+      // In production, this would query stored analysis results
+      res.json([]);
     } catch (error) {
-      console.error("Get analyses error:", error);
+      console.error('Error fetching analyses:', error);
       res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Internal server error" 
+        error: error instanceof Error ? error.message : 'Failed to fetch analyses' 
       });
     }
-  });
-
-  // Health check endpoint
-  app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
-      timestamp: new Date().toISOString(),
-      service: "vertex-ai-vision" 
-    });
   });
 
   const httpServer = createServer(app);

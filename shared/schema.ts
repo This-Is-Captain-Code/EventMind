@@ -9,21 +9,52 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
 });
 
-export const visionAnalyses = pgTable("vision_analyses", {
+// Vertex AI Vision platform tables
+export const visionApplications = pgTable("vision_applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-  imageData: text("image_data").notNull(),
-  textDetections: jsonb("text_detections"),
-  objectDetections: jsonb("object_detections"),
-  faceDetections: jsonb("face_detections"),
-  logoDetections: jsonb("logo_detections"),
-  safeSearchAnnotation: jsonb("safe_search_annotation"),
-  processingTime: real("processing_time"),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  location: text("location").notNull().default('us-central1'),
+  state: text("state").notNull().default('PENDING'), // PENDING, DEPLOYED, UNDEPLOYED
+  createTime: timestamp("create_time").defaultNow().notNull(),
+  updateTime: timestamp("update_time").defaultNow().notNull(),
 });
 
+export const visionStreams = pgTable("vision_streams", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  applicationId: varchar("application_id").references(() => visionApplications.id).notNull(),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  sourceUri: text("source_uri"), // RTMP/WebRTC stream URI
+  state: text("state").notNull().default('INACTIVE'), // ACTIVE, INACTIVE, ERROR
+  createTime: timestamp("create_time").defaultNow().notNull(),
+});
+
+export const visionAnalyses = pgTable("vision_analyses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  streamId: varchar("stream_id").references(() => visionStreams.id).notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  frameData: text("frame_data"), // base64 encoded frame
+  annotations: jsonb("annotations"), // Vision model annotations
+  processingTime: real("processing_time"),
+  confidence: real("confidence"),
+});
+
+// Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+});
+
+export const insertVisionApplicationSchema = createInsertSchema(visionApplications).omit({
+  id: true,
+  createTime: true,
+  updateTime: true,
+});
+
+export const insertVisionStreamSchema = createInsertSchema(visionStreams).omit({
+  id: true,
+  createTime: true,
 });
 
 export const insertVisionAnalysisSchema = createInsertSchema(visionAnalyses).omit({
@@ -31,86 +62,63 @@ export const insertVisionAnalysisSchema = createInsertSchema(visionAnalyses).omi
   timestamp: true,
 });
 
+// Type exports
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export type VisionApplication = typeof visionApplications.$inferSelect;
+export type InsertVisionApplication = z.infer<typeof insertVisionApplicationSchema>;
+
+export type VisionStream = typeof visionStreams.$inferSelect;
+export type InsertVisionStream = z.infer<typeof insertVisionStreamSchema>;
+
 export type VisionAnalysis = typeof visionAnalyses.$inferSelect;
 export type InsertVisionAnalysis = z.infer<typeof insertVisionAnalysisSchema>;
 
-// Vertex AI Vision API response types
-export interface TextDetection {
-  text: string;
-  confidence: number;
-  boundingBox?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-}
-
-export interface ObjectDetection {
+// Vertex AI Vision Platform types
+export interface VertexAIVisionApplicationConfig {
   name: string;
-  confidence: number;
-  boundingBox?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
+  displayName: string;
+  location: string;
+  models: string[]; // Pre-trained model names
 }
 
-export interface FaceDetection {
-  confidence: number;
-  emotions?: {
-    joy?: string;
-    sorrow?: string;
-    anger?: string;
-    surprise?: string;
-  };
-  boundingBox?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
+export interface VertexAIVisionStreamConfig {
+  name: string;
+  displayName: string;
+  applicationId: string;
+  sourceType: 'WEBCAM' | 'RTMP' | 'FILE';
+  sourceUri?: string;
 }
 
-export interface LogoDetection {
-  description: string;
-  confidence: number;
-  boundingBox?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
+export interface StreamingAnnotation {
+  timestamp: number;
+  frameId: string;
+  detections: {
+    type: 'OBJECT' | 'PERSON' | 'VEHICLE' | 'FACE' | 'TEXT';
+    name: string;
+    confidence: number;
+    boundingBox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+    attributes?: Record<string, any>;
+  }[];
 }
 
-export interface SafeSearchAnnotation {
-  adult: string;
-  spoof: string;
-  medical: string;
-  violence: string;
-  racy: string;
-  overall: string;
+export interface VisionPlatformResponse {
+  streamId: string;
+  frameTimestamp: number;
+  annotations: StreamingAnnotation;
+  processingLatency: number;
+  modelVersion: string;
 }
 
-export interface VisionApiResponse {
-  textDetections: TextDetection[];
-  objectDetections: ObjectDetection[];
-  faceDetections: FaceDetection[];
-  logoDetections: LogoDetection[];
-  safeSearchAnnotation: SafeSearchAnnotation;
-  processingTime: number;
-}
-
-export interface VisionApiRequest {
-  imageData: string; // base64 encoded image
-  features: {
-    textDetection: boolean;
-    objectDetection: boolean;
-    faceDetection: boolean;
-    logoDetection: boolean;
-    safeSearch: boolean;
-  };
+export interface VisionPlatformRequest {
+  applicationId: string;
+  streamId: string;
+  frameData: string; // base64 encoded frame
+  models: string[]; // Models to run
 }
