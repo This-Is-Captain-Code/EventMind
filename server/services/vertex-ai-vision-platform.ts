@@ -339,6 +339,9 @@ export class VertexAIVisionPlatformService {
       }
       
       const data = await response.json();
+      console.log('✅ Google Cloud Vision API - Object Detection Response:');
+      console.log('Status:', response.status, response.statusText);
+      console.log('Response body:', JSON.stringify(data, null, 2));
       return this.parseVisionAPIObjectResponse(data);
       
     } catch (error) {
