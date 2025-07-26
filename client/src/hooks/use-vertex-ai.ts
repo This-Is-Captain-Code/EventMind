@@ -9,6 +9,7 @@ export interface VertexAIFeatures {
   faceDetection: boolean;
   logoDetection: boolean;
   safeSearch: boolean;
+  fireSmokeDetection: boolean; // 🔥 Fire and smoke detection
 }
 
 export interface PerformanceStats {
@@ -21,11 +22,12 @@ export interface PerformanceStats {
 
 export function useVertexAI() {
   const [features, setFeatures] = useState<VertexAIFeatures>({
-    textDetection: true,
-    objectDetection: true,
+    textDetection: false,
+    objectDetection: false, // Disabled to focus on fire/smoke only
     faceDetection: false,
     logoDetection: false,
-    safeSearch: true,
+    safeSearch: false,
+    fireSmokeDetection: true, // 🔥 Enable fire/smoke detection by default
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,7 +46,7 @@ export function useVertexAI() {
 
   const analyzeImageMutation = useMutation({
     mutationFn: async (request: VisionApiRequest) => {
-      const response = await apiRequest('POST', '/api/vision/analyze', request);
+      const response = await apiRequest('POST', '/api/vision/process-frame', request);
       return await response.json() as VisionApiResponse;
     },
     onSuccess: (data, variables) => {
@@ -117,9 +119,19 @@ export function useVertexAI() {
 
     setIsProcessing(true);
     
+    // Convert features to models for backend processing
+    const models: string[] = [];
+    if (features.objectDetection) models.push('OBJECT_DETECTION');
+    if (features.faceDetection) models.push('FACE_DETECTION');
+    if (features.textDetection) models.push('TEXT_DETECTION');
+    if (features.logoDetection) models.push('LOGO_DETECTION');
+    if (features.fireSmokeDetection) models.push('FIRE_SMOKE_DETECTION'); // 🔥
+
     const request: VisionApiRequest = {
-      imageData,
-      features,
+      applicationId: 'default-app',
+      streamId: 'webcam-stream',
+      frameData: imageData,
+      models,
     };
 
     analyzeImageMutation.mutate(request);
