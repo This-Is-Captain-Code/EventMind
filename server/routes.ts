@@ -1,8 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { vertexAIService } from "./services/vertexai";
+import { VertexAIVisionPlatformService } from "./services/vertex-ai-vision-platform";
+
 import { z } from "zod";
+
+// Initialize the Vertex AI Vision Platform service
+const vertexAIVisionService = new VertexAIVisionPlatformService();
 
 // Validation schemas
 const applicationConfigSchema = z.object({
@@ -32,7 +36,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint
   app.get("/api/health", async (req, res) => {
     try {
-      const health = await vertexAIService.getHealth();
+      const health = await vertexAIVisionService.checkHealth();
       res.json(health);
     } catch (error) {
       res.status(500).json({ 
@@ -45,7 +49,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Vision Application Management
   app.get("/api/vision/applications", async (req, res) => {
     try {
-      const applications = await vertexAIService.listApplications();
+      const applications = await vertexAIVisionService.listApplications();
       res.json(applications);
     } catch (error) {
       console.error('Error listing applications:', error);
@@ -60,7 +64,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = applicationConfigSchema.parse(req.body);
       
       // Create application in Vertex AI Vision platform
-      const application = await vertexAIService.createApplication(validatedData);
+      const application = await vertexAIVisionService.createApplication({
+        id: validatedData.name,
+        displayName: validatedData.displayName,
+        location: validatedData.location,
+        models: validatedData.models
+      });
       
       res.json({ 
         ...application,
@@ -81,7 +90,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/vision/applications/:id/deploy", async (req, res) => {
     try {
       const applicationId = req.params.id;
-      const result = await vertexAIService.deployApplication(applicationId);
+      const result = await vertexAIVisionService.createApplication({ 
+        id: applicationId, 
+        displayName: `Deployed-${applicationId}`, 
+        models: ['GENERAL_OBJECT_DETECTION'] 
+      });
       
       res.json({ 
         ...result,
@@ -101,7 +114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = streamConfigSchema.parse(req.body);
       
       // Create stream in Vertex AI Vision platform
-      const stream = await vertexAIService.createStream(validatedData);
+      const stream = await vertexAIVisionService.createStream(validatedData);
       
       res.json({ 
         ...stream,
@@ -125,7 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = processFrameSchema.parse(req.body);
       
       // Process frame with Vertex AI Vision platform
-      const analysis = await vertexAIService.processFrame(validatedData);
+      const analysis = await vertexAIVisionService.processFrame(validatedData);
       
       // Store analysis result in memory for the analysis history
       await storage.createVisionAnalysis({

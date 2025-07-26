@@ -1,4 +1,6 @@
 import { GoogleAuth, JWT } from 'google-auth-library';
+import aiplatform from '@google-cloud/aiplatform';
+import { VideoIntelligenceServiceClient } from '@google-cloud/video-intelligence';
 import * as fs from 'fs';
 
 export interface VisionApplication {
@@ -35,17 +37,40 @@ export class VertexAIVisionService {
   private auth: GoogleAuth;
   private projectId: string;
   private baseUrl: string;
+  private aiplatformClient: any;
+  private videoClient: VideoIntelligenceServiceClient;
+  private location: string;
 
   constructor() {
     this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || 'agenticai-466913';
+    this.location = 'us-central1';
     
-    // Use GoogleAuth with service account credentials
+    // Load service account credentials
+    const credentials = JSON.parse(fs.readFileSync('./google-credentials.json', 'utf8'));
+    
+    // Initialize Google Auth
     this.auth = new GoogleAuth({
-      credentials: JSON.parse(fs.readFileSync('./google-credentials.json', 'utf8')),
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      credentials,
+      scopes: [
+        'https://www.googleapis.com/auth/cloud-platform',
+        'https://www.googleapis.com/auth/cloud-vision'
+      ],
       projectId: this.projectId,
     });
     
+    // Initialize Vertex AI Platform client
+    this.aiplatformClient = new aiplatform.PredictionServiceClient({
+      credentials,
+      projectId: this.projectId,
+    });
+    
+    // Initialize Video Intelligence client
+    this.videoClient = new VideoIntelligenceServiceClient({
+      credentials,
+      projectId: this.projectId,
+    });
+    
+    // Vertex AI Vision API base URL
     this.baseUrl = `https://visionai.googleapis.com/v1/projects/${this.projectId}/locations`;
   }
 
