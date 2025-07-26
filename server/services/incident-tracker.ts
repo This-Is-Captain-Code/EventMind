@@ -41,7 +41,16 @@ export class IncidentTracker {
       .values(insertData)
       .returning();
 
-    console.log(`🚨 INCIDENT RECORDED: ${incident.incidentType} - ${incident.severity} severity (ID: ${incident.id})`);
+    const localTime = new Date(incident.timestamp).toLocaleString('en-US', {
+      timeZone: 'America/New_York', // Adjust to user's timezone as needed
+      year: 'numeric',
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    console.log(`🚨 INCIDENT RECORDED: ${incident.incidentType} - ${incident.severity} severity at ${localTime} (ID: ${incident.id})`);
     
     return incident;
   }

@@ -33,7 +33,7 @@ export class SafetyAnalyzer {
   private densityHistory: DensityZone[][] = [];
   private readonly maxFrameHistory = 30; // Store last 30 frames (~5 seconds at 6fps)
   private readonly densityGridSize = 8; // 8x8 grid for density analysis
-  private readonly densityThreshold = 0.15; // 15% of area occupied = high density
+  private readonly densityThreshold = 2; // 2+ people per grid cell = concerning density
   private readonly surgeThreshold = 0.5; // 50% increase in density = surge
   private readonly fallingVelocityThreshold = 0.3; // Threshold for detecting falling motion
 
@@ -183,7 +183,8 @@ export class SafetyAnalyzer {
           }
         }
 
-        const density = personCount / (gridWidth * gridHeight);
+        // Density as people per grid cell (more intuitive)
+        const density = personCount;
         
         zones.push({
           x: zoneX,
@@ -227,7 +228,8 @@ export class SafetyAnalyzer {
           currentDensity: current.density,
           previousDensity: previous.density,
           increase: ((current.density - previous.density) / previous.density * 100).toFixed(1),
-          severity: current.density > this.densityThreshold * 2 ? 'HIGH' : 'MEDIUM',
+          // Severity based on actual person count in the zone
+          severity: current.personCount >= 4 ? 'HIGH' : current.personCount >= 2 ? 'MEDIUM' : 'LOW',
           timestamp: current.timestamp
         });
       }
