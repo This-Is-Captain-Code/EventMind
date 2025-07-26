@@ -373,9 +373,6 @@ export class VertexAIVisionPlatformService {
       }
       
       const data = await response.json();
-      console.log('✅ Google Cloud Vision API - Object Detection Response:');
-      console.log('Status:', response.status, response.statusText);
-      console.log('Response body:', JSON.stringify(data, null, 2));
       return this.parseVisionAPIObjectResponse(data);
       
     } catch (error) {
@@ -633,15 +630,24 @@ export class VertexAIVisionPlatformService {
         response.localizedObjectAnnotations.forEach((obj: any) => {
           const vertices = obj.boundingPoly?.normalizedVertices || [];
           if (vertices.length >= 4) {
+            // Calculate bounding box from all vertices for accurate positioning
+            const minX = Math.min(...vertices.map((v: any) => v.x || 0));
+            const minY = Math.min(...vertices.map((v: any) => v.y || 0));
+            const maxX = Math.max(...vertices.map((v: any) => v.x || 0));
+            const maxY = Math.max(...vertices.map((v: any) => v.y || 0));
+            
+            // Use specific type for person detection
+            const detectionType = obj.name === 'Person' ? 'PERSON_DETECTION' : 'OBJECT_DETECTION';
+            
             detections.push({
-              type: 'OBJECT_DETECTION',
+              type: detectionType,
               label: obj.name || 'Object',
               confidence: obj.score || 0.5,
               bbox: {
-                left: vertices[0].x || 0,
-                top: vertices[0].y || 0,
-                right: vertices[2].x || 0,
-                bottom: vertices[2].y || 0
+                left: minX,
+                top: minY,
+                right: maxX,
+                bottom: maxY
               }
             });
           }

@@ -120,14 +120,10 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
       return null;
     }
 
-    // Debug logging for coordinate alignment
-    console.log(`Detection ${index}:`, {
-      type: detection.type,
-      label: detection.label,
-      originalBbox: detection.bbox,
-      normalizedBbox: bbox,
-      positionPercent: { left, top, width, height }
-    });
+    // Debug logging (can be removed in production)
+    if (detection.type === 'PERSON_DETECTION') {
+      console.log(`Person detected at:`, { left: left.toFixed(1), top: top.toFixed(1), width: width.toFixed(1), height: height.toFixed(1) });
+    }
 
     const colorClass = getColorForType(detection.type);
     const badgeColor = getBadgeColorForType(detection.type);
