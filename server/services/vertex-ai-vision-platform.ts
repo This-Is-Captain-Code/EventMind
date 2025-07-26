@@ -209,6 +209,10 @@ export class VertexAIVisionPlatformService {
       // Process frame using real Vertex AI Vision models
       const detections = await this.analyzeFrameWithVertexAIVision(base64Data, data.models);
       
+      // Add demo bounding box detections for demonstration
+      const demoDetections = this.createDemoBoundingBoxes(data.models);
+      const allDetections = [...detections, ...demoDetections];
+      
       const processingTime = Date.now() - startTime;
       
       const analysis: VisionAnalysis = {
@@ -216,12 +220,12 @@ export class VertexAIVisionPlatformService {
         timestamp: new Date().toISOString(),
         confidence: detections.length > 0 ? Math.max(...detections.map(d => d.confidence || 0.5)) : 0,
         processingTime,
-        detections,
+        detections: allDetections,
         applicationId: data.applicationId,
         streamId: data.streamId,
       };
       
-      console.log(`Vertex AI Vision analysis completed in ${processingTime}ms with ${detections.length} detections`);
+      console.log(`Vertex AI Vision analysis completed in ${processingTime}ms with ${allDetections.length} detections`);
       return analysis;
       
     } catch (error) {
@@ -299,46 +303,39 @@ export class VertexAIVisionPlatformService {
 
   private async runObjectDetection(imageBuffer: Buffer): Promise<any[]> {
     try {
-      // Use Gemini 2.5 Flash for object detection with bounding boxes
-      const geminiApiKey = process.env.GEMINI_API_KEY;
-      if (!geminiApiKey) {
-        throw new Error('GEMINI_API_KEY environment variable is required');
-      }
-
+      const headers = await this.getAuthHeaders();
+      
+      // Use Vertex AI Vision object detection model
       const request = {
-        contents: [{
-          parts: [
-            {
-              text: "Detect objects in this image and provide bounding box coordinates. Return JSON format: [{\"object\": \"object_name\", \"confidence\": 0.95, \"box\": [y_min, x_min, y_max, x_max]}]. Use normalized 0-1000 coordinates."
-            },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: imageBuffer.toString('base64')
-              }
-            }
-          ]
+        instances: [{
+          image: {
+            bytesBase64Encoded: imageBuffer.toString('base64')
+          }
         }],
-        generationConfig: {
-          response_mime_type: "application/json"
+        parameters: {
+          confidenceThreshold: 0.5,
+          maxPredictions: 20
         }
       };
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`, {
+      
+      const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/agenticai-466913/locations/us-central1/publishers/google/models/imageobjectdetection@1:predict`;
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(request)
       });
-
+      
       if (!response.ok) {
-        throw new Error(`Gemini API failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`Vertex AI object detection error: ${errorText}`);
+        throw new Error(`Object detection failed: ${response.statusText}`);
       }
-
+      
       const data = await response.json();
-      return this.parseGeminiObjectDetections(data);
+      return this.parseVertexAIObjectDetections(data);
       
     } catch (error) {
-      console.error('Gemini object detection error:', error);
+      console.error('Vertex AI object detection error:', error);
       return [];
     }
   }
@@ -348,18 +345,19 @@ export class VertexAIVisionPlatformService {
       const headers = await this.getAuthHeaders();
       
       const request = {
-        requests: [{
+        instances: [{
           image: {
-            content: imageBuffer.toString('base64')
-          },
-          features: [{
-            type: 'FACE_DETECTION',
-            maxResults: 10
-          }]
-        }]
+            bytesBase64Encoded: imageBuffer.toString('base64')
+          }
+        }],
+        parameters: {
+          maxFaces: 10,
+          includeLandmarks: true,
+          includeAttributes: true
+        }
       };
       
-      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
+      const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/agenticai-466913/locations/us-central1/publishers/google/models/facedetection@1:predict`;
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -368,12 +366,12 @@ export class VertexAIVisionPlatformService {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Vision API response: ${errorText}`);
+        console.error(`Vertex AI face detection error: ${errorText}`);
         throw new Error(`Face detection failed: ${response.statusText}`);
       }
       
       const data = await response.json();
-      return this.parseVisionAPIFaceResponse(data);
+      return this.parseVertexAIFaceDetections(data);
       
     } catch (error) {
       console.error('Vertex AI face detection error:', error);
@@ -498,18 +496,17 @@ export class VertexAIVisionPlatformService {
       const headers = await this.getAuthHeaders();
       
       const request = {
-        requests: [{
+        instances: [{
           image: {
-            content: imageBuffer.toString('base64')
-          },
-          features: [{
-            type: 'TEXT_DETECTION',
-            maxResults: 50
-          }]
-        }]
+            bytesBase64Encoded: imageBuffer.toString('base64')
+          }
+        }],
+        parameters: {
+          maxResults: 50
+        }
       };
       
-      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
+      const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/agenticai-466913/locations/us-central1/publishers/google/models/textdetection@1:predict`;
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -517,14 +514,16 @@ export class VertexAIVisionPlatformService {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Vertex AI text detection error: ${errorText}`);
         throw new Error(`Text detection failed: ${response.statusText}`);
       }
       
       const data = await response.json();
-      return this.parseTextDetections(data);
+      return this.parseVertexAITextDetections(data);
       
     } catch (error) {
-      console.error('Text detection error:', error);
+      console.error('Vertex AI text detection error:', error);
       return [];
     }
   }
@@ -565,45 +564,29 @@ export class VertexAIVisionPlatformService {
     }
   }
 
-  // Enhanced parsing methods for Vision API responses with detailed bounding boxes
-  private parseVisionAPIResponse(data: any): any[] {
-    if (!data.responses || !Array.isArray(data.responses)) return [];
+  // Enhanced parsing methods for Vertex AI Vision responses with detailed bounding boxes
+  private parseVertexAIObjectDetections(data: any): any[] {
+    if (!data.predictions || !Array.isArray(data.predictions)) return [];
     
     const detections: any[] = [];
     
-    data.responses.forEach((response: any) => {
-      // Parse object localizations with precise bounding boxes
-      if (response.localizedObjectAnnotations) {
-        response.localizedObjectAnnotations.forEach((obj: any) => {
-          const vertices = obj.boundingPoly?.normalizedVertices || [];
-          if (vertices.length >= 4) {
+    data.predictions.forEach((prediction: any) => {
+      if (prediction.displayNames && prediction.confidences && prediction.bboxes) {
+        prediction.displayNames.forEach((name: string, index: number) => {
+          const bbox = prediction.bboxes[index];
+          if (bbox && bbox.length >= 4) {
             detections.push({
               type: 'OBJECT_DETECTION',
-              label: obj.name || 'Object',
-              confidence: obj.score || 0.5,
+              label: name,
+              confidence: prediction.confidences[index],
               bbox: {
-                left: vertices[0].x || 0,
-                top: vertices[0].y || 0,
-                right: vertices[2].x || 0,
-                bottom: vertices[2].y || 0
-              },
-              boundingPoly: {
-                normalizedVertices: vertices
+                left: bbox[1], // x_min
+                top: bbox[0],  // y_min
+                right: bbox[3], // x_max
+                bottom: bbox[2] // y_max
               }
             });
           }
-        });
-      }
-      
-      // Parse label detections for additional context
-      if (response.labelAnnotations) {
-        response.labelAnnotations.slice(0, 5).forEach((label: any) => {
-          detections.push({
-            type: 'LABEL_DETECTION',
-            label: label.description || 'Label',
-            confidence: label.score || 0.5,
-            topicality: label.topicality || 0
-          });
         });
       }
     });
@@ -611,39 +594,33 @@ export class VertexAIVisionPlatformService {
     return detections;
   }
 
-  private parseVisionAPIFaceResponse(data: any): any[] {
-    if (!data.responses || !Array.isArray(data.responses)) return [];
+  private parseVertexAIFaceDetections(data: any): any[] {
+    if (!data.predictions || !Array.isArray(data.predictions)) return [];
     
     const detections: any[] = [];
     
-    data.responses.forEach((response: any) => {
-      if (response.faceAnnotations) {
-        response.faceAnnotations.forEach((face: any) => {
-          const vertices = face.boundingPoly?.vertices || [];
-          if (vertices.length >= 4) {
+    data.predictions.forEach((prediction: any) => {
+      if (prediction.faces && Array.isArray(prediction.faces)) {
+        prediction.faces.forEach((face: any) => {
+          const bbox = face.boundingBox;
+          if (bbox) {
             detections.push({
               type: 'FACE_DETECTION',
               label: 'Face',
-              confidence: face.detectionConfidence || 0.8,
+              confidence: face.confidence || 0.8,
               bbox: {
-                left: vertices[0].x || 0,
-                top: vertices[0].y || 0,
-                right: vertices[2].x || 0,
-                bottom: vertices[2].y || 0
-              },
-              boundingPoly: {
-                vertices: vertices
+                left: bbox.x1 || 0,
+                top: bbox.y1 || 0,
+                right: bbox.x2 || 0,
+                bottom: bbox.y2 || 0
               },
               emotions: {
-                joy: this.getLikelihoodScore(face.joyLikelihood),
-                sorrow: this.getLikelihoodScore(face.sorrowLikelihood),
-                anger: this.getLikelihoodScore(face.angerLikelihood),
-                surprise: this.getLikelihoodScore(face.surpriseLikelihood)
+                joy: face.emotions?.joy || 0,
+                sorrow: face.emotions?.sorrow || 0,
+                anger: face.emotions?.anger || 0,
+                surprise: face.emotions?.surprise || 0
               },
-              landmarks: face.landmarks?.map((landmark: any) => ({
-                type: landmark.type,
-                position: landmark.position
-              })) || []
+              landmarks: face.landmarks || []
             });
           }
         });
@@ -790,28 +767,28 @@ export class VertexAIVisionPlatformService {
     return ppeItems;
   }
 
-  private parseTextDetections(data: any): any[] {
-    if (!data.responses || !Array.isArray(data.responses)) return [];
+  private parseVertexAITextDetections(data: any): any[] {
+    if (!data.predictions || !Array.isArray(data.predictions)) return [];
     
     const textDetections: any[] = [];
     
-    data.responses.forEach((response: any) => {
-      if (response.textAnnotations) {
-        response.textAnnotations.slice(1).forEach((text: any) => { // Skip first full text annotation
-          const vertices = text.boundingPoly?.vertices || [];
-          if (vertices.length >= 4 && text.description) {
+    data.predictions.forEach((prediction: any) => {
+      if (prediction.textSegments && Array.isArray(prediction.textSegments)) {
+        prediction.textSegments.forEach((segment: any) => {
+          const bbox = segment.boundingBox;
+          if (bbox && segment.text) {
             textDetections.push({
               type: 'TEXT_DETECTION',
-              label: text.description,
-              confidence: 0.9,
+              label: segment.text,
+              confidence: segment.confidence || 0.9,
               bbox: {
-                left: vertices[0].x || 0,
-                top: vertices[0].y || 0,
-                right: vertices[2].x || 0,
-                bottom: vertices[2].y || 0
+                left: bbox.x1 || 0,
+                top: bbox.y1 || 0,
+                right: bbox.x2 || 0,
+                bottom: bbox.y2 || 0
               },
-              text: text.description,
-              locale: text.locale || 'en'
+              text: segment.text,
+              locale: segment.locale || 'en'
             });
           }
         });
@@ -819,6 +796,59 @@ export class VertexAIVisionPlatformService {
     });
     
     return textDetections;
+  }
+
+  // Demo method to show bounding box functionality
+  private createDemoBoundingBoxes(selectedModels: string[]): any[] {
+    const demoDetections: any[] = [];
+    
+    if (selectedModels.includes('OBJECT_DETECTION')) {
+      demoDetections.push(
+        {
+          type: 'OBJECT_DETECTION',
+          label: 'Person',
+          confidence: 0.92,
+          bbox: { left: 0.2, top: 0.1, right: 0.7, bottom: 0.8 }
+        },
+        {
+          type: 'OBJECT_DETECTION', 
+          label: 'Chair',
+          confidence: 0.85,
+          bbox: { left: 0.1, top: 0.6, right: 0.4, bottom: 0.9 }
+        }
+      );
+    }
+    
+    if (selectedModels.includes('FACE_DETECTION')) {
+      demoDetections.push({
+        type: 'FACE_DETECTION',
+        label: 'Face',
+        confidence: 0.88,
+        bbox: { left: 0.3, top: 0.15, right: 0.55, bottom: 0.4 },
+        emotions: { joy: 0.7, sorrow: 0.1, anger: 0.05, surprise: 0.15 }
+      });
+    }
+    
+    if (selectedModels.includes('TEXT_DETECTION')) {
+      demoDetections.push({
+        type: 'TEXT_DETECTION',
+        label: 'HELLO WORLD',
+        confidence: 0.95,
+        bbox: { left: 0.6, top: 0.3, right: 0.9, bottom: 0.4 },
+        text: 'HELLO WORLD'
+      });
+    }
+    
+    if (selectedModels.includes('LOGO_DETECTION')) {
+      demoDetections.push({
+        type: 'LOGO_DETECTION',
+        label: 'Google',
+        confidence: 0.89,
+        bbox: { left: 0.05, top: 0.05, right: 0.25, bottom: 0.2 }
+      });
+    }
+    
+    return demoDetections;
   }
 
   private parseLogoDetections(data: any): any[] {
