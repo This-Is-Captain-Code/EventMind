@@ -286,6 +286,7 @@ export class VertexAIVisionPlatformService {
         switch (model) {
           case 'OBJECT_DETECTION':
           case 'GENERAL_OBJECT_DETECTION':
+          case 'PERSON_DETECTION':
             const objectDetections = await this.runObjectDetection(imageBuffer);
             detections.push(...objectDetections);
             break;
