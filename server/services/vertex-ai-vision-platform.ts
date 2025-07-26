@@ -209,9 +209,7 @@ export class VertexAIVisionPlatformService {
       // Process frame using real Vertex AI Vision models
       const detections = await this.analyzeFrameWithVertexAIVision(base64Data, data.models);
       
-      // Add demo bounding box detections for demonstration
-      const demoDetections = this.createDemoBoundingBoxes(data.models);
-      const allDetections = [...detections, ...demoDetections];
+      // Use only real detections from Google Cloud Vision API
       
       const processingTime = Date.now() - startTime;
       
@@ -220,12 +218,12 @@ export class VertexAIVisionPlatformService {
         timestamp: new Date().toISOString(),
         confidence: detections.length > 0 ? Math.max(...detections.map(d => d.confidence || 0.5)) : 0,
         processingTime,
-        detections: allDetections,
+        detections,
         applicationId: data.applicationId,
         streamId: data.streamId,
       };
       
-      console.log(`Vertex AI Vision analysis completed in ${processingTime}ms with ${allDetections.length} detections`);
+      console.log(`Vertex AI Vision analysis completed in ${processingTime}ms with ${detections.length} detections`);
       return analysis;
       
     } catch (error) {
@@ -329,7 +327,14 @@ export class VertexAIVisionPlatformService {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Vertex AI object detection error: ${errorText}`);
+        console.error(`Google Cloud Vision API error: ${errorText}`);
+        
+        // Check if it's a service disabled error
+        if (errorText.includes('SERVICE_DISABLED') || errorText.includes('has not been used')) {
+          console.log('Google Cloud Vision API needs to be enabled for this project');
+          return []; // Return empty array instead of throwing error
+        }
+        
         throw new Error(`Object detection failed: ${response.statusText}`);
       }
       
@@ -367,7 +372,14 @@ export class VertexAIVisionPlatformService {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Vertex AI face detection error: ${errorText}`);
+        console.error(`Google Cloud Vision API error: ${errorText}`);
+        
+        // Check if it's a service disabled error
+        if (errorText.includes('SERVICE_DISABLED') || errorText.includes('has not been used')) {
+          console.log('Google Cloud Vision API needs to be enabled for this project');
+          return []; // Return empty array instead of throwing error
+        }
+        
         throw new Error(`Face detection failed: ${response.statusText}`);
       }
       
@@ -517,7 +529,14 @@ export class VertexAIVisionPlatformService {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Vertex AI text detection error: ${errorText}`);
+        console.error(`Google Cloud Vision API error: ${errorText}`);
+        
+        // Check if it's a service disabled error
+        if (errorText.includes('SERVICE_DISABLED') || errorText.includes('has not been used')) {
+          console.log('Google Cloud Vision API needs to be enabled for this project');
+          return []; // Return empty array instead of throwing error
+        }
+        
         throw new Error(`Text detection failed: ${response.statusText}`);
       }
       
@@ -888,58 +907,7 @@ export class VertexAIVisionPlatformService {
     return textDetections;
   }
 
-  // Demo method to show bounding box functionality
-  private createDemoBoundingBoxes(selectedModels: string[]): any[] {
-    const demoDetections: any[] = [];
-    
-    if (selectedModels.includes('OBJECT_DETECTION')) {
-      demoDetections.push(
-        {
-          type: 'OBJECT_DETECTION',
-          label: 'Person',
-          confidence: 0.92,
-          bbox: { left: 0.2, top: 0.1, right: 0.7, bottom: 0.8 }
-        },
-        {
-          type: 'OBJECT_DETECTION', 
-          label: 'Chair',
-          confidence: 0.85,
-          bbox: { left: 0.1, top: 0.6, right: 0.4, bottom: 0.9 }
-        }
-      );
-    }
-    
-    if (selectedModels.includes('FACE_DETECTION')) {
-      demoDetections.push({
-        type: 'FACE_DETECTION',
-        label: 'Face',
-        confidence: 0.88,
-        bbox: { left: 0.3, top: 0.15, right: 0.55, bottom: 0.4 },
-        emotions: { joy: 0.7, sorrow: 0.1, anger: 0.05, surprise: 0.15 }
-      });
-    }
-    
-    if (selectedModels.includes('TEXT_DETECTION')) {
-      demoDetections.push({
-        type: 'TEXT_DETECTION',
-        label: 'HELLO WORLD',
-        confidence: 0.95,
-        bbox: { left: 0.6, top: 0.3, right: 0.9, bottom: 0.4 },
-        text: 'HELLO WORLD'
-      });
-    }
-    
-    if (selectedModels.includes('LOGO_DETECTION')) {
-      demoDetections.push({
-        type: 'LOGO_DETECTION',
-        label: 'Google',
-        confidence: 0.89,
-        bbox: { left: 0.05, top: 0.05, right: 0.25, bottom: 0.2 }
-      });
-    }
-    
-    return demoDetections;
-  }
+
 
   private parseLogoDetections(data: any): any[] {
     if (!data.responses || !Array.isArray(data.responses)) return [];
