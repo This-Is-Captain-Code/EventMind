@@ -155,16 +155,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // **DIRECT INCIDENT RECORDING** (gRPC-style database insertion)
+      // Debug: Check analysis structure
+      console.log('🔍 ANALYSIS OBJECT KEYS:', Object.keys(analysis));
+      console.log('🔍 OCCUPANCY DENSITY:', (analysis as any).occupancyDensity);
+      
       // Record density alerts immediately for HIGH and MEDIUM density
-      if (analysis.occupancyDensity && analysis.occupancyDensity.personCount > 0) {
-        const densityLevel = analysis.occupancyDensity.densityLevel;
-        const personCount = analysis.occupancyDensity.personCount;
+      if ((analysis as any).occupancyDensity && (analysis as any).occupancyDensity.personCount > 0) {
+        const densityLevel = (analysis as any).occupancyDensity.densityLevel;
+        const personCount = (analysis as any).occupancyDensity.personCount;
         
         // Direct database recording for density incidents
         await directIncidentRecorder.recordDensityAlert(
           personCount,
           densityLevel,
-          analysis.frameId || Date.now().toString(),
+          (analysis as any).frameId || Date.now().toString(),
           storedAnalysis.id,
           validatedData.applicationId,
           validatedData.streamId
@@ -172,10 +176,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Record safety analysis incidents directly to database
-      if (analysis.safetyAnalysis) {
+      if ((analysis as any).safetyAnalysis) {
         await directIncidentRecorder.recordSafetyAnalysis(
-          analysis.safetyAnalysis,
-          analysis.frameId || Date.now().toString(),
+          (analysis as any).safetyAnalysis,
+          (analysis as any).frameId || Date.now().toString(),
           storedAnalysis.id,
           validatedData.applicationId,
           validatedData.streamId

@@ -23,12 +23,12 @@ export class DirectIncidentRecorder {
     if (densityLevel === 'LOW') return;
 
     try {
+      console.log(`📝 ATTEMPTING TO RECORD DENSITY INCIDENT: ${densityLevel} severity with ${personCount} people`);
       const insertData: InsertSafetyIncident = {
-        timestamp: new Date(),
         incidentType: 'DENSITY_ALERT',
         severity: densityLevel,
         confidence: 0.9,
-        personCount: personCount,
+        personCount: personCount.toString(),
         streamSource: 'default-camera',
         applicationId: applicationId,
         streamId: streamId,
@@ -86,7 +86,6 @@ export class DirectIncidentRecorder {
       for (const surge of safetyAnalysis.densitySurges || []) {
         if (surge.severity === 'HIGH' || surge.severity === 'MEDIUM') {
           incidents.push({
-            timestamp: new Date(),
             incidentType: 'SURGE_DETECTION',
             severity: surge.severity,
             confidence: 0.8,
@@ -108,7 +107,6 @@ export class DirectIncidentRecorder {
       // Process falling persons
       for (const fallingPerson of safetyAnalysis.fallingPersons || []) {
         incidents.push({
-          timestamp: new Date(),
           incidentType: 'FALLING_PERSON',
           severity: 'HIGH',
           confidence: 0.9,
@@ -129,7 +127,6 @@ export class DirectIncidentRecorder {
       // Process lying persons
       for (const lyingPerson of safetyAnalysis.lyingPersons || []) {
         incidents.push({
-          timestamp: new Date(),
           incidentType: 'LYING_PERSON',
           severity: 'MEDIUM',
           confidence: 0.8,
