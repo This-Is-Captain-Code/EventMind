@@ -280,6 +280,15 @@ export class VertexAIVisionPlatformService {
 
       const safetyAnalysis = await this.safetyAnalyzer.processFrame(frameData);
 
+      // Extract occupancy data from detections for incident recording
+      const occupancyDetection = detections.find(d => d.type === "OCCUPANCY_COUNT");
+      const occupancyDensity = occupancyDetection ? {
+        personCount: occupancyDetection.count,
+        densityLevel: occupancyDetection.density,
+        densityColor: occupancyDetection.densityColor,
+        densityDescription: occupancyDetection.densityDescription
+      } : null;
+
       const analysis: VisionAnalysis = {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
@@ -292,6 +301,8 @@ export class VertexAIVisionPlatformService {
         applicationId: data.applicationId,
         streamId: data.streamId,
         safetyAnalysis, // Add safety analysis results
+        occupancyDensity, // Add occupancy data for incident recording
+        frameId: frameData.frameId, // Add frame ID for tracking
       };
 
       console.log(

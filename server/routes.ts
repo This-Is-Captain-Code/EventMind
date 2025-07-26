@@ -155,14 +155,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // **DIRECT INCIDENT RECORDING** (gRPC-style database insertion)
-      // Debug: Check analysis structure
-      console.log('🔍 ANALYSIS OBJECT KEYS:', Object.keys(analysis));
-      console.log('🔍 OCCUPANCY DENSITY:', (analysis as any).occupancyDensity);
-      
       // Record density alerts immediately for HIGH and MEDIUM density
       if ((analysis as any).occupancyDensity && (analysis as any).occupancyDensity.personCount > 0) {
         const densityLevel = (analysis as any).occupancyDensity.densityLevel;
         const personCount = (analysis as any).occupancyDensity.personCount;
+        
+        console.log(`🎯 DENSITY DETECTED: ${personCount} people, ${densityLevel} severity`);
         
         // Direct database recording for density incidents
         await directIncidentRecorder.recordDensityAlert(
