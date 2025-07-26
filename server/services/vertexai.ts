@@ -203,14 +203,37 @@ export class VertexAIVisionService {
     };
     
     try {
-      // Use Cloud Vision API for actual object and face detection
-      const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+      // Use Vertex AI Gemini for advanced multimodal vision analysis
+      const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+      
+      // Build comprehensive analysis prompt
+      const analysisPrompt = this.buildAnalysisPrompt(data.models);
+      
+      const geminiRequest = {
+        contents: [{
+          parts: [
+            { text: analysisPrompt },
+            {
+              inline_data: {
+                mime_type: 'image/jpeg',
+                data: base64Image
+              }
+            }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json'
+        }
+      };
+      
+      const response = await fetch(`${geminiEndpoint}?key=${process.env.GEMINI_API_KEY}`, {
         method: 'POST',
         headers: {
-          ...headers,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(visionRequest),
+        body: JSON.stringify(geminiRequest),
       });
       
       if (!response.ok) {
@@ -221,8 +244,8 @@ export class VertexAIVisionService {
       const result = await response.json();
       const processingTime = Date.now() - startTime;
       
-      // Parse Vision API response into our format
-      const detections = this.parseVisionApiResponse(result);
+      // Parse Gemini vision response into our format
+      const detections = this.parseGeminiVisionResponse(result);
       
       return {
         id: Date.now().toString(),
@@ -235,7 +258,7 @@ export class VertexAIVisionService {
       };
       
     } catch (error) {
-      console.error('Cloud Vision API error:', error);
+      console.error('Vertex AI Gemini error:', error);
       
       // Fallback to ensure the app continues working even if API fails
       const processingTime = Date.now() - startTime;
@@ -256,76 +279,82 @@ export class VertexAIVisionService {
     }
   }
   
-  private parseVisionApiResponse(result: any): any[] {
-    const detections: any[] = [];
-    const responses = result.responses || [];
-    
-    if (responses.length === 0) return detections;
-    
-    const response = responses[0];
-    
-    // Parse object detections
-    if (response.localizedObjectAnnotations) {
-      for (const obj of response.localizedObjectAnnotations) {
-        detections.push({
-          type: 'OBJECT_DETECTION',
-          description: obj.name || 'Object',
-          confidence: obj.score || 0,
-          boundingBox: {
-            x: obj.boundingPoly?.normalizedVertices?.[0]?.x || 0,
-            y: obj.boundingPoly?.normalizedVertices?.[0]?.y || 0,
-            width: (obj.boundingPoly?.normalizedVertices?.[2]?.x || 1) - (obj.boundingPoly?.normalizedVertices?.[0]?.x || 0),
-            height: (obj.boundingPoly?.normalizedVertices?.[2]?.y || 1) - (obj.boundingPoly?.normalizedVertices?.[0]?.y || 0)
-          }
-        });
+  private buildAnalysisPrompt(models: string[]): string {
+    return `You are a computer vision AI assistant. Analyze this image and detect objects, faces, and notable features.
+
+Return your response as a JSON object with this exact structure:
+{
+  "detections": [
+    {
+      "type": "OBJECT_DETECTION",
+      "description": "Person",
+      "confidence": 0.95,
+      "boundingBox": {
+        "x": 0.2,
+        "y": 0.1,
+        "width": 0.3,
+        "height": 0.6
+      }
+    },
+    {
+      "type": "FACE_DETECTION", 
+      "description": "Human face",
+      "confidence": 0.92,
+      "boundingBox": {
+        "x": 0.4,
+        "y": 0.15,
+        "width": 0.15,
+        "height": 0.2
       }
     }
-    
-    // Parse face detections
-    if (response.faceAnnotations) {
-      for (const face of response.faceAnnotations) {
-        const vertices = face.boundingPoly?.vertices || [];
-        if (vertices.length >= 4) {
-          // Calculate normalized coordinates
-          const x = Math.min(...vertices.map((v: any) => v.x || 0));
-          const y = Math.min(...vertices.map((v: any) => v.y || 0));
-          const maxX = Math.max(...vertices.map((v: any) => v.x || 0));
-          const maxY = Math.max(...vertices.map((v: any) => v.y || 0));
-          
-          detections.push({
-            type: 'FACE_DETECTION',
-            description: `Face (Joy: ${this.getLikelihoodText(face.joyLikelihood)})`,
-            confidence: face.detectionConfidence || 0.9,
-            boundingBox: {
-              x: x / 1000, // Normalize assuming typical image width
-              y: y / 1000, // Normalize assuming typical image height  
-              width: (maxX - x) / 1000,
-              height: (maxY - y) / 1000
-            },
-            emotions: {
-              joy: face.joyLikelihood,
-              anger: face.angerLikelihood,
-              surprise: face.surpriseLikelihood,
-              sorrow: face.sorrowLikelihood
-            }
-          });
-        }
+  ]
+}
+
+Requirements:
+- Scan the entire image for people, faces, objects, vehicles, animals, furniture, text, logos
+- Use normalized coordinates (0.0 to 1.0) where (0,0) is top-left corner
+- Confidence should be 0.7-0.99 for clear detections
+- Include at least 1-5 detections if you see anything recognizable
+- Types: "OBJECT_DETECTION", "FACE_DETECTION", "LABEL_DETECTION", "TEXT_DETECTION"
+
+Respond with ONLY the JSON, no additional text.`;
+  }
+  
+  private parseGeminiVisionResponse(result: any): any[] {
+    try {
+      console.log('Full Gemini response:', JSON.stringify(result, null, 2));
+      
+      const candidates = result.candidates || [];
+      if (candidates.length === 0) {
+        console.log('No candidates in response');
+        return [];
       }
-    }
-    
-    // Parse label detections
-    if (response.labelAnnotations) {
-      for (const label of response.labelAnnotations.slice(0, 5)) { // Top 5 labels
-        detections.push({
-          type: 'LABEL_DETECTION',
-          description: label.description || 'Label',
-          confidence: label.score || 0,
-          boundingBox: { x: 0, y: 0, width: 1, height: 1 } // Labels don't have bounding boxes
-        });
+      
+      const content = candidates[0].content;
+      if (!content || !content.parts || content.parts.length === 0) {
+        console.log('No content or parts in response');
+        return [];
       }
+      
+      const textResponse = content.parts[0].text;
+      console.log('Gemini text response:', textResponse);
+      
+      if (!textResponse) {
+        console.log('No text response from Gemini');
+        return [];
+      }
+      
+      // Parse JSON response from Gemini
+      const parsed = JSON.parse(textResponse);
+      console.log('Parsed detections:', parsed.detections);
+      return parsed.detections || [];
+      
+    } catch (error) {
+      console.error('Error parsing Gemini response:', error);
+      console.error('Raw result:', result);
+      // Return empty array for parsing errors
+      return [];
     }
-    
-    return detections;
   }
   
   private getLikelihoodText(likelihood: string): string {
