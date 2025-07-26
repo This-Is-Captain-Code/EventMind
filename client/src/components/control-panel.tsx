@@ -92,11 +92,13 @@ export function ControlPanel({
               </SelectTrigger>
               <SelectContent>
                 {devices.length > 0 ? (
-                  devices.map((device) => (
-                    <SelectItem key={device.deviceId} value={device.deviceId}>
-                      {device.label}
-                    </SelectItem>
-                  ))
+                  devices
+                    .filter(device => device.deviceId && device.deviceId.trim() !== '')
+                    .map((device) => (
+                      <SelectItem key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
+                      </SelectItem>
+                    ))
                 ) : (
                   <SelectItem value="no-devices" disabled>
                     No cameras found

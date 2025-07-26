@@ -454,11 +454,19 @@ export default function VertexAIPlatform() {
                       <SelectValue placeholder="Select camera" />
                     </SelectTrigger>
                     <SelectContent>
-                      {devices.map(device => (
-                        <SelectItem key={device.deviceId} value={device.deviceId}>
-                          {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
+                      {devices.length > 0 ? (
+                        devices
+                          .filter(device => device.deviceId && device.deviceId.trim() !== '')
+                          .map(device => (
+                            <SelectItem key={device.deviceId} value={device.deviceId}>
+                              {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
+                            </SelectItem>
+                          ))
+                      ) : (
+                        <SelectItem value="no-camera" disabled>
+                          No cameras found
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
