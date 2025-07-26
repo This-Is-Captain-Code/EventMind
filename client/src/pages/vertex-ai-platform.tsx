@@ -799,6 +799,17 @@ export default function VertexAIPlatform() {
                     playsInline
                     muted
                     className="w-full aspect-video object-cover"
+                    onLoadedMetadata={() => {
+                      // Log video dimensions for debugging alignment
+                      if (videoRef.current) {
+                        console.log('Video loaded with dimensions:', {
+                          videoWidth: videoRef.current.videoWidth,
+                          videoHeight: videoRef.current.videoHeight,
+                          displayWidth: videoRef.current.clientWidth,
+                          displayHeight: videoRef.current.clientHeight
+                        });
+                      }
+                    }}
                   />
                   <canvas
                     ref={canvasRef}

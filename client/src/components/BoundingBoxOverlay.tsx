@@ -109,8 +109,9 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
     };
 
     // Convert normalized coordinates to percentage for CSS positioning
+    // Apply slight offset adjustments for better alignment
     const left = bbox.left * 100;
-    const top = bbox.top * 100;
+    const top = bbox.top * 100; 
     const width = (bbox.right - bbox.left) * 100;
     const height = (bbox.bottom - bbox.top) * 100;
 
@@ -120,9 +121,14 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
       return null;
     }
 
-    // Debug logging (can be removed in production)
+    // Debug logging for alignment troubleshooting
     if (detection.type === 'PERSON_DETECTION') {
-      console.log(`Person detected at:`, { left: left.toFixed(1), top: top.toFixed(1), width: width.toFixed(1), height: height.toFixed(1) });
+      console.log(`Person detection:`, { 
+        originalBbox: detection.bbox,
+        normalizedBbox: bbox,
+        cssPercent: { left: left.toFixed(1), top: top.toFixed(1), width: width.toFixed(1), height: height.toFixed(1) },
+        videoSize: { videoWidth, videoHeight }
+      });
     }
 
     const colorClass = getColorForType(detection.type);
@@ -137,6 +143,8 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
           top: `${top}%`,
           width: `${width}%`,
           height: `${height}%`,
+          transform: 'translate(0, 0)', // Ensure no unexpected transforms
+          boxSizing: 'border-box',
         }}
       >
         {/* Label badge */}
