@@ -39,7 +39,7 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private visionApplications: Map<string, VisionApplication>;
   private visionStreams: Map<string, VisionStream>;
-  private visionAnalyses: Map<string, VisionAnalysis>;
+  public visionAnalyses: Map<string, VisionAnalysis>;
 
   constructor() {
     this.users = new Map();
@@ -140,7 +140,7 @@ export class MemStorage implements IStorage {
 
   async getRecentVisionAnalyses(limit: number): Promise<VisionAnalysis[]> {
     const analyses = Array.from(this.visionAnalyses.values())
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, limit);
     return analyses;
   }
@@ -148,7 +148,7 @@ export class MemStorage implements IStorage {
   async getVisionAnalysesByStream(streamId: string, limit: number): Promise<VisionAnalysis[]> {
     return Array.from(this.visionAnalyses.values())
       .filter(analysis => analysis.streamId === streamId)
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, limit);
   }
 

@@ -127,6 +127,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process frame with Vertex AI Vision platform
       const analysis = await vertexAIService.processFrame(validatedData);
       
+      // Store analysis result in memory for the analysis history
+      await storage.createVisionAnalysis({
+        streamId: analysis.streamId,
+        frameData: validatedData.frameData.substring(0, 100) + '...', // Store truncated frame data
+        annotations: analysis.detections,
+        processingTime: analysis.processingTime,
+        confidence: analysis.confidence
+      });
+      
       res.json(analysis);
     } catch (error) {
       console.error('Error processing frame:', error);
@@ -145,9 +154,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
       
-      // For now, return empty array as we're not storing analysis history
-      // In production, this would query stored analysis results
-      res.json([]);
+      // Get stored analysis results from memory storage
+      const analyses = await storage.getRecentVisionAnalyses(limit);
+      
+      res.json(analyses);
     } catch (error) {
       console.error('Error fetching analyses:', error);
       res.status(500).json({ 
