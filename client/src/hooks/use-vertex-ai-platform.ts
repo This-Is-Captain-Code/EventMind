@@ -1,21 +1,15 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 // Application Management
 export function useVisionApplications() {
   return useQuery({
-    queryKey: ['/api/vision/applications'] as const,
-    queryFn: () => apiRequest('/api/vision/applications'),
-    retry: 1,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    queryKey: ['/api/vision/applications'],
   });
 }
 
 export function useVisionApplication(id: string) {
   return useQuery({
-    queryKey: ['/api/vision/applications', id] as const,
-    queryFn: () => apiRequest(`/api/vision/applications/${id}`),
+    queryKey: ['/api/vision/applications', id],
     enabled: !!id,
   });
 }
@@ -91,8 +85,7 @@ export function useCreateVisionStream() {
 
 export function useVisionStream(id: string) {
   return useQuery({
-    queryKey: ['/api/vision/streams', id] as const,
-    queryFn: () => apiRequest(`/api/vision/streams/${id}`),
+    queryKey: ['/api/vision/streams', id],
     enabled: !!id,
   });
 }
@@ -126,8 +119,14 @@ export function useProcessFrame() {
 // Analysis History
 export function useVisionAnalyses(limit: number = 20) {
   return useQuery({
-    queryKey: ['/api/vision/analyses', { limit }] as const,
-    queryFn: () => apiRequest(`/api/vision/analyses?limit=${limit}`),
+    queryKey: ['/api/vision/analyses', { limit }],
+    queryFn: async () => {
+      const response = await fetch(`/api/vision/analyses?limit=${limit}`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch analyses');
+      return response.json();
+    },
     retry: false,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
@@ -137,8 +136,7 @@ export function useVisionAnalyses(limit: number = 20) {
 
 export function useVisionAnalysis(id: string) {
   return useQuery({
-    queryKey: ['/api/vision/analyses', id] as const,
-    queryFn: () => apiRequest(`/api/vision/analyses/${id}`),
+    queryKey: ['/api/vision/analyses', id],
     enabled: !!id,
   });
 }
@@ -146,8 +144,14 @@ export function useVisionAnalysis(id: string) {
 // Platform Health
 export function usePlatformHealth() {
   return useQuery({
-    queryKey: ['/api/health'] as const,
-    queryFn: () => apiRequest('/api/health'),
+    queryKey: ['/api/health'],
+    queryFn: async () => {
+      const response = await fetch('/api/health', {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch health status');
+      return response.json();
+    },
     retry: 1,
     refetchOnMount: true,
     refetchOnWindowFocus: false,

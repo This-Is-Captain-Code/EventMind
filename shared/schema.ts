@@ -104,7 +104,7 @@ export interface VertexAIVisionStreamConfig {
   name: string;
   displayName: string;
   applicationId: string;
-  sourceType: string;
+  sourceType: 'WEBCAM' | 'RTMP' | 'FILE';
   sourceUri?: string;
 }
 export interface VertexAIVisionApplicationConfig {
