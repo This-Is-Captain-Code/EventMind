@@ -70,10 +70,10 @@ Preferred communication style: Simple, everyday language.
 
 ## External Dependencies
 
-### Google AI Services
-- **Gemini API**: Core AI functionality for multimodal image analysis via Google AI Studio
-- **Authentication**: API key-based authentication (simpler than service account)
-- **Configuration**: Free tier available with generous quotas
+### Google Cloud Services  
+- **Vertex AI Vision API**: Complete enterprise vision platform with applications, streams, and models
+- **Authentication**: Service account credentials with proper JWT authentication (project ID: agenticai-466913)
+- **Configuration**: Full Google Cloud integration with real-time processing capabilities
 
 ### Third-party Libraries
 - **UI Framework**: Radix UI primitives for accessible components

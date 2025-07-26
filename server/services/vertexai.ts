@@ -1,4 +1,5 @@
-import { GoogleAuth } from 'google-auth-library';
+import { GoogleAuth, JWT } from 'google-auth-library';
+import * as fs from 'fs';
 
 export interface VisionApplication {
   name: string;
@@ -37,10 +38,14 @@ export class VertexAIVisionService {
 
   constructor() {
     this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || 'agenticai-466913';
+    
+    // Use GoogleAuth with service account credentials
     this.auth = new GoogleAuth({
-      keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      credentials: JSON.parse(fs.readFileSync('./google-credentials.json', 'utf8')),
       scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      projectId: this.projectId,
     });
+    
     this.baseUrl = `https://visionai.googleapis.com/v1/projects/${this.projectId}/locations`;
   }
 
@@ -84,7 +89,6 @@ export class VertexAIVisionService {
 
     const applicationData = {
       displayName: data.displayName,
-      models: data.models || ['GENERAL_OBJECT_DETECTION'],
     };
 
     const response = await fetch(
