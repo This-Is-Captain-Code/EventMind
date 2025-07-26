@@ -805,10 +805,27 @@ export default function VertexAIPlatform() {
                     className="hidden"
                   />
                   
+                  {/* Bounding Box Overlay */}
+                  {isStreaming && lastProcessingResult && lastProcessingResult.detections.length > 0 && (
+                    <BoundingBoxOverlay
+                      detections={lastProcessingResult.detections}
+                      videoWidth={videoRef.current?.videoWidth || 640}
+                      videoHeight={videoRef.current?.videoHeight || 480}
+                      className="absolute inset-0"
+                    />
+                  )}
+                  
                   {/* Processing Overlay */}
                   {isProcessing && (
                     <div className="absolute top-4 right-4 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium animate-pulse">
                       Processing...
+                    </div>
+                  )}
+
+                  {/* Detection Count */}
+                  {lastProcessingResult && lastProcessingResult.detections.length > 0 && (
+                    <div className="absolute bottom-4 left-4 bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+                      {lastProcessingResult.detections.length} detection{lastProcessingResult.detections.length !== 1 ? 's' : ''}
                     </div>
                   )}
 

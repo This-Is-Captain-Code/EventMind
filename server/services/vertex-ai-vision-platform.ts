@@ -305,20 +305,22 @@ export class VertexAIVisionPlatformService {
     try {
       const headers = await this.getAuthHeaders();
       
-      // Use Vertex AI Vision object detection model
+      // Use Google Cloud Vision API for object localization
       const request = {
-        instances: [{
+        requests: [{
           image: {
-            bytesBase64Encoded: imageBuffer.toString('base64')
-          }
-        }],
-        parameters: {
-          confidenceThreshold: 0.5,
-          maxPredictions: 20
-        }
+            content: imageBuffer.toString('base64')
+          },
+          features: [
+            {
+              type: 'OBJECT_LOCALIZATION',
+              maxResults: 20
+            }
+          ]
+        }]
       };
       
-      const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/agenticai-466913/locations/us-central1/publishers/google/models/imageobjectdetection@1:predict`;
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -332,7 +334,7 @@ export class VertexAIVisionPlatformService {
       }
       
       const data = await response.json();
-      return this.parseVertexAIObjectDetections(data);
+      return this.parseVisionAPIObjectResponse(data);
       
     } catch (error) {
       console.error('Vertex AI object detection error:', error);
@@ -345,19 +347,18 @@ export class VertexAIVisionPlatformService {
       const headers = await this.getAuthHeaders();
       
       const request = {
-        instances: [{
+        requests: [{
           image: {
-            bytesBase64Encoded: imageBuffer.toString('base64')
-          }
-        }],
-        parameters: {
-          maxFaces: 10,
-          includeLandmarks: true,
-          includeAttributes: true
-        }
+            content: imageBuffer.toString('base64')
+          },
+          features: [{
+            type: 'FACE_DETECTION',
+            maxResults: 10
+          }]
+        }]
       };
       
-      const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/agenticai-466913/locations/us-central1/publishers/google/models/facedetection@1:predict`;
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -371,7 +372,7 @@ export class VertexAIVisionPlatformService {
       }
       
       const data = await response.json();
-      return this.parseVertexAIFaceDetections(data);
+      return this.parseVisionAPIFaceResponse(data);
       
     } catch (error) {
       console.error('Vertex AI face detection error:', error);
@@ -496,17 +497,18 @@ export class VertexAIVisionPlatformService {
       const headers = await this.getAuthHeaders();
       
       const request = {
-        instances: [{
+        requests: [{
           image: {
-            bytesBase64Encoded: imageBuffer.toString('base64')
-          }
-        }],
-        parameters: {
-          maxResults: 50
-        }
+            content: imageBuffer.toString('base64')
+          },
+          features: [{
+            type: 'TEXT_DETECTION',
+            maxResults: 50
+          }]
+        }]
       };
       
-      const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/agenticai-466913/locations/us-central1/publishers/google/models/textdetection@1:predict`;
+      const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -520,7 +522,7 @@ export class VertexAIVisionPlatformService {
       }
       
       const data = await response.json();
-      return this.parseVertexAITextDetections(data);
+      return this.parseVisionAPITextResponse(data);
       
     } catch (error) {
       console.error('Vertex AI text detection error:', error);
@@ -564,7 +566,95 @@ export class VertexAIVisionPlatformService {
     }
   }
 
-  // Enhanced parsing methods for Vertex AI Vision responses with detailed bounding boxes
+  // Enhanced parsing methods for Google Cloud Vision API responses with detailed bounding boxes
+  private parseVisionAPIObjectResponse(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+    
+    const detections: any[] = [];
+    
+    data.responses.forEach((response: any) => {
+      if (response.localizedObjectAnnotations) {
+        response.localizedObjectAnnotations.forEach((obj: any) => {
+          const vertices = obj.boundingPoly?.normalizedVertices || [];
+          if (vertices.length >= 4) {
+            detections.push({
+              type: 'OBJECT_DETECTION',
+              label: obj.name || 'Object',
+              confidence: obj.score || 0.5,
+              bbox: {
+                left: vertices[0].x || 0,
+                top: vertices[0].y || 0,
+                right: vertices[2].x || 0,
+                bottom: vertices[2].y || 0
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    return detections;
+  }
+
+  private parseVisionAPIFaceResponse(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+    
+    const detections: any[] = [];
+    
+    data.responses.forEach((response: any) => {
+      if (response.faceAnnotations) {
+        response.faceAnnotations.forEach((face: any) => {
+          const vertices = face.boundingPoly?.vertices || [];
+          if (vertices.length >= 4) {
+            detections.push({
+              type: 'FACE_DETECTION',
+              label: 'Face',
+              confidence: face.detectionConfidence || 0.8,
+              bbox: {
+                left: Math.min(...vertices.map((v: any) => v.x || 0)) / 1000, // Normalize to 0-1
+                top: Math.min(...vertices.map((v: any) => v.y || 0)) / 1000,
+                right: Math.max(...vertices.map((v: any) => v.x || 0)) / 1000,
+                bottom: Math.max(...vertices.map((v: any) => v.y || 0)) / 1000
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    return detections;
+  }
+
+  private parseVisionAPITextResponse(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+    
+    const textDetections: any[] = [];
+    
+    data.responses.forEach((response: any) => {
+      if (response.textAnnotations) {
+        response.textAnnotations.slice(1).forEach((text: any) => {
+          const vertices = text.boundingPoly?.vertices || [];
+          if (vertices.length >= 4 && text.description) {
+            textDetections.push({
+              type: 'TEXT_DETECTION',
+              label: text.description,
+              confidence: 0.9,
+              bbox: {
+                left: Math.min(...vertices.map((v: any) => v.x || 0)) / 1000,
+                top: Math.min(...vertices.map((v: any) => v.y || 0)) / 1000,
+                right: Math.max(...vertices.map((v: any) => v.x || 0)) / 1000,
+                bottom: Math.max(...vertices.map((v: any) => v.y || 0)) / 1000
+              },
+              text: text.description
+            });
+          }
+        });
+      }
+    });
+    
+    return textDetections;
+  }
+
   private parseVertexAIObjectDetections(data: any): any[] {
     if (!data.predictions || !Array.isArray(data.predictions)) return [];
     
