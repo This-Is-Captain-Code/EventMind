@@ -98,7 +98,7 @@ export class VertexAIVisionPlatformService {
     // Set up API endpoints
     this.visionAIBaseUrl = `https://visionai.googleapis.com/v1/projects/${this.projectId}/locations`;
     this.aiPlatformBaseUrl = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${this.location}`;
-    
+
     // Initialize safety analyzer for real-time monitoring
     this.safetyAnalyzer = new SafetyAnalyzer();
   }
@@ -275,7 +275,7 @@ export class VertexAIVisionPlatformService {
       const frameData = {
         timestamp: Date.now(),
         detections,
-        frameId: `frame_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        frameId: `frame_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       };
 
       const safetyAnalysis = await this.safetyAnalyzer.processFrame(frameData);
@@ -291,7 +291,7 @@ export class VertexAIVisionPlatformService {
         detections,
         applicationId: data.applicationId,
         streamId: data.streamId,
-        safetyAnalysis // Add safety analysis results
+        safetyAnalysis, // Add safety analysis results
       };
 
       console.log(
@@ -502,7 +502,7 @@ export class VertexAIVisionPlatformService {
             features: [
               {
                 type: "OBJECT_LOCALIZATION",
-                maxResults: 50, // Higher limit to catch all people
+                maxResults: 100, // Maximum limit to catch all people
               },
             ],
           },
@@ -915,17 +915,30 @@ export class VertexAIVisionPlatformService {
 
     let personCount = 0;
     const personDetections: any[] = [];
+    
+    // Debug: Log all detected objects
+    console.log(`🔍 VISION API RESPONSE: Processing ${data.responses.length} responses`);
 
-    data.responses.forEach((response: any) => {
+    data.responses.forEach((response: any, responseIndex: number) => {
       if (response.localizedObjectAnnotations) {
+        console.log(`🔍 Response ${responseIndex}: Found ${response.localizedObjectAnnotations.length} total objects`);
         response.localizedObjectAnnotations.forEach((obj: any) => {
-          if (obj.name === "Person" && obj.score > 0.5) {
+          // More liberal person detection - include more variations
+          const objectName = (obj.name || "").toLowerCase();
+          const isPerson = objectName === "person" || 
+                          objectName === "human" || 
+                          objectName === "people" ||
+                          objectName.includes("person") ||
+                          objectName.includes("human");
+          
+          if (isPerson && obj.score > 0.4) { // Lower confidence threshold
             personCount++;
+            console.log(`🔍 Found ${obj.name} with confidence ${obj.score}`);
             const vertices = obj.boundingPoly?.normalizedVertices || [];
             if (vertices.length >= 4) {
               personDetections.push({
                 type: "PERSON_DETECTION",
-                label: "Person",
+                label: `Person (${Math.round(obj.score * 100)}%)`,
                 confidence: obj.score,
                 bbox: {
                   left: vertices[0].x || 0,
@@ -945,15 +958,18 @@ export class VertexAIVisionPlatformService {
     let densityColor = "#22c55e"; // Green
     let densityDescription = "Safe occupancy level";
     
-    if (personCount >= 15) {
+    if (personCount >= 10) {
       densityLevel = "HIGH";
       densityColor = "#ef4444"; // Red
       densityDescription = "High density - Monitor closely";
-    } else if (personCount >= 8) {
+    } else if (personCount >= 6) {
       densityLevel = "MEDIUM";
       densityColor = "#f97316"; // Orange
       densityDescription = "Moderate density - Watch for changes";
     }
+
+    // Add debugging to see what's happening
+    console.log(`🔍 OCCUPANCY DEBUG: Found ${personCount} people, density: ${densityLevel}`);
 
     const occupancyData = [
       {
