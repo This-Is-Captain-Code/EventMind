@@ -167,7 +167,6 @@ export class VertexAIVisionService {
     frameData: string;
     models: string[];
   }): Promise<VisionAnalysis> {
-    const location = 'us-central1';
     const headers = await this.getAuthHeaders();
 
     // Convert base64 frame data to the format expected by Vertex AI Vision
@@ -180,8 +179,9 @@ export class VertexAIVisionService {
       models: data.models,
     };
 
+    // data.applicationId is already the full path: projects/agenticai-466913/locations/us-central1/applications/my-vision-app
     const response = await fetch(
-      `${this.baseUrl}/${location}/applications/${data.applicationId}/streams/${data.streamId}:analyze`,
+      `${this.baseUrl}/${data.applicationId}/streams/${data.streamId}:analyze`,
       {
         method: 'POST',
         headers,

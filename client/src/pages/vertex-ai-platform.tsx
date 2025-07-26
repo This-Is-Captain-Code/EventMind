@@ -42,7 +42,7 @@ export default function VertexAIPlatform() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const [selectedApplication, setSelectedApplication] = useState<string>('');
-  const [selectedStream, setSelectedStream] = useState<string>('');
+  const [selectedStream, setSelectedStream] = useState<string>('default-stream');
   const [isProcessing, setIsProcessing] = useState(false);
   const [autoProcessing, setAutoProcessing] = useState(false);
   const [processingInterval, setProcessingInterval] = useState(2000);
@@ -188,7 +188,7 @@ export default function VertexAIPlatform() {
 
       await processFrame.mutateAsync({
         applicationId: selectedApplication,
-        streamId: selectedStream,
+        streamId: selectedStream || 'default-stream',
         frameData,
         models: newAppModels,
       });
@@ -223,14 +223,14 @@ export default function VertexAIPlatform() {
 
   // Auto-processing interval
   useEffect(() => {
-    if (!autoProcessing || !isStreaming || isProcessing) return;
+    if (!autoProcessing || !isStreaming || isProcessing || !selectedApplication) return;
 
     const interval = setInterval(() => {
       handleProcessFrame();
     }, processingInterval);
 
     return () => clearInterval(interval);
-  }, [autoProcessing, isStreaming, isProcessing, processingInterval, selectedApplication, selectedStream]);
+  }, [autoProcessing, isStreaming, isProcessing, processingInterval, selectedApplication]);
 
   const getStateColor = (state: string): "default" | "destructive" | "secondary" | "outline" => {
     switch (state) {
@@ -606,6 +606,7 @@ export default function VertexAIPlatform() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="default-stream">Default Stream</SelectItem>
+                        <SelectItem value="webcam-stream">Webcam Stream</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
