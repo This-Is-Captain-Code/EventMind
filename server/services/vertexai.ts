@@ -167,52 +167,182 @@ export class VertexAIVisionService {
     frameData: string;
     models: string[];
   }): Promise<VisionAnalysis> {
-    // For now, let's simulate the frame processing since the real Vertex AI Vision
-    // requires complex stream setup and may not be fully configured
-    // This allows the user to test the frontend functionality
-    
     const startTime = Date.now();
+    const headers = await this.getAuthHeaders();
     
-    // Simulate API processing delay
-    await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
+    // Extract base64 image data (remove data:image/jpeg;base64, prefix)
+    const base64Image = data.frameData.split(',')[1];
     
-    const processingTime = Date.now() - startTime;
+    // Build Cloud Vision API request
+    const features = [];
     
-    // Generate realistic mock detection results
-    const mockDetections = [
-      {
-        type: 'OBJECT_DETECTION',
-        description: 'Person',
-        confidence: 0.85 + Math.random() * 0.1,
-        boundingBox: {
-          x: Math.random() * 0.3,
-          y: Math.random() * 0.3,
-          width: 0.2 + Math.random() * 0.3,
-          height: 0.3 + Math.random() * 0.4
+    // Add requested features based on models
+    if (data.models.includes('OBJECT_DETECTION') || data.models.includes('GENERAL_OBJECT_DETECTION')) {
+      features.push({ type: 'OBJECT_LOCALIZATION', maxResults: 10 });
+    }
+    if (data.models.includes('FACE_DETECTION')) {
+      features.push({ type: 'FACE_DETECTION', maxResults: 10 });
+    }
+    if (data.models.includes('LABEL_DETECTION')) {
+      features.push({ type: 'LABEL_DETECTION', maxResults: 10 });
+    }
+    
+    // Default to object detection if no specific models requested
+    if (features.length === 0) {
+      features.push({ type: 'OBJECT_LOCALIZATION', maxResults: 10 });
+      features.push({ type: 'FACE_DETECTION', maxResults: 10 });
+    }
+    
+    const visionRequest = {
+      requests: [{
+        features: features,
+        image: {
+          content: base64Image
         }
-      },
-      {
-        type: 'FACE_DETECTION',
-        description: 'Face',
-        confidence: 0.9 + Math.random() * 0.05,
-        boundingBox: {
-          x: 0.4 + Math.random() * 0.2,
-          y: 0.1 + Math.random() * 0.2,
-          width: 0.1 + Math.random() * 0.1,
-          height: 0.1 + Math.random() * 0.1
+      }]
+    };
+    
+    try {
+      // Use Cloud Vision API for actual object and face detection
+      const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(visionRequest),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Vision API error: ${response.status} - ${errorText}`);
+      }
+      
+      const result = await response.json();
+      const processingTime = Date.now() - startTime;
+      
+      // Parse Vision API response into our format
+      const detections = this.parseVisionApiResponse(result);
+      
+      return {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        confidence: this.calculateOverallConfidence(detections),
+        processingTime,
+        detections,
+        applicationId: data.applicationId,
+        streamId: data.streamId,
+      };
+      
+    } catch (error) {
+      console.error('Cloud Vision API error:', error);
+      
+      // Fallback to ensure the app continues working even if API fails
+      const processingTime = Date.now() - startTime;
+      return {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        confidence: 0.0,
+        processingTime,
+        detections: [{
+          type: 'ERROR',
+          description: `API Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          confidence: 0.0,
+          boundingBox: { x: 0, y: 0, width: 1, height: 1 }
+        }],
+        applicationId: data.applicationId,
+        streamId: data.streamId,
+      };
+    }
+  }
+  
+  private parseVisionApiResponse(result: any): any[] {
+    const detections: any[] = [];
+    const responses = result.responses || [];
+    
+    if (responses.length === 0) return detections;
+    
+    const response = responses[0];
+    
+    // Parse object detections
+    if (response.localizedObjectAnnotations) {
+      for (const obj of response.localizedObjectAnnotations) {
+        detections.push({
+          type: 'OBJECT_DETECTION',
+          description: obj.name || 'Object',
+          confidence: obj.score || 0,
+          boundingBox: {
+            x: obj.boundingPoly?.normalizedVertices?.[0]?.x || 0,
+            y: obj.boundingPoly?.normalizedVertices?.[0]?.y || 0,
+            width: (obj.boundingPoly?.normalizedVertices?.[2]?.x || 1) - (obj.boundingPoly?.normalizedVertices?.[0]?.x || 0),
+            height: (obj.boundingPoly?.normalizedVertices?.[2]?.y || 1) - (obj.boundingPoly?.normalizedVertices?.[0]?.y || 0)
+          }
+        });
+      }
+    }
+    
+    // Parse face detections
+    if (response.faceAnnotations) {
+      for (const face of response.faceAnnotations) {
+        const vertices = face.boundingPoly?.vertices || [];
+        if (vertices.length >= 4) {
+          // Calculate normalized coordinates
+          const x = Math.min(...vertices.map((v: any) => v.x || 0));
+          const y = Math.min(...vertices.map((v: any) => v.y || 0));
+          const maxX = Math.max(...vertices.map((v: any) => v.x || 0));
+          const maxY = Math.max(...vertices.map((v: any) => v.y || 0));
+          
+          detections.push({
+            type: 'FACE_DETECTION',
+            description: `Face (Joy: ${this.getLikelihoodText(face.joyLikelihood)})`,
+            confidence: face.detectionConfidence || 0.9,
+            boundingBox: {
+              x: x / 1000, // Normalize assuming typical image width
+              y: y / 1000, // Normalize assuming typical image height  
+              width: (maxX - x) / 1000,
+              height: (maxY - y) / 1000
+            },
+            emotions: {
+              joy: face.joyLikelihood,
+              anger: face.angerLikelihood,
+              surprise: face.surpriseLikelihood,
+              sorrow: face.sorrowLikelihood
+            }
+          });
         }
       }
-    ];
+    }
     
-    return {
-      id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
-      confidence: 0.85 + Math.random() * 0.1,
-      processingTime,
-      detections: mockDetections,
-      applicationId: data.applicationId,
-      streamId: data.streamId,
+    // Parse label detections
+    if (response.labelAnnotations) {
+      for (const label of response.labelAnnotations.slice(0, 5)) { // Top 5 labels
+        detections.push({
+          type: 'LABEL_DETECTION',
+          description: label.description || 'Label',
+          confidence: label.score || 0,
+          boundingBox: { x: 0, y: 0, width: 1, height: 1 } // Labels don't have bounding boxes
+        });
+      }
+    }
+    
+    return detections;
+  }
+  
+  private getLikelihoodText(likelihood: string): string {
+    const map: { [key: string]: string } = {
+      'VERY_UNLIKELY': 'Very Low',
+      'UNLIKELY': 'Low',  
+      'POSSIBLE': 'Possible',
+      'LIKELY': 'High',
+      'VERY_LIKELY': 'Very High'
     };
+    return map[likelihood] || 'Unknown';
+  }
+  
+  private calculateOverallConfidence(detections: any[]): number {
+    if (detections.length === 0) return 0;
+    const total = detections.reduce((sum, det) => sum + (det.confidence || 0), 0);
+    return total / detections.length;
   }
 
   async getHealth(): Promise<{ status: string; services: any[] }> {
