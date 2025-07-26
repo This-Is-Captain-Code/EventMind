@@ -114,7 +114,7 @@ Preferred communication style: Simple, everyday language.
 - **Real-time person tracking** - Sophisticated tracking system that follows individuals across multiple frames using position correlation
 - **Density surge detection** - 8x8 grid-based density analysis that detects crowd surges with configurable thresholds and severity levels
 - **Enhanced occupancy density visualization** - Prominent display of crowd density levels (HIGH/MEDIUM/LOW) with color-coded alerts
-- **Smart density thresholds** - 15+ people = HIGH (red), 8-14 people = MEDIUM (orange), <8 people = LOW (green) with descriptive status messages
+- **Smart density thresholds** - >12 people = HIGH (red), 6-12 people = MEDIUM (orange), <6 people = LOW (green) with descriptive status messages
 - **Visual density indicators** - Large, color-coded occupancy display with person count and density level prominently shown on video overlay
 - **Falling person detection** - Motion analysis that identifies rapid downward movement patterns indicating falling individuals
 - **Lying person detection** - Aspect ratio analysis to identify persons in horizontal positions that may indicate medical emergencies

@@ -958,11 +958,11 @@ export class VertexAIVisionPlatformService {
     let densityColor = "#22c55e"; // Green
     let densityDescription = "Safe occupancy level";
     
-    if (personCount >= 10) {
+    if (personCount > 12) {
       densityLevel = "HIGH";
       densityColor = "#ef4444"; // Red
       densityDescription = "High density - Monitor closely";
-    } else if (personCount >= 6) {
+    } else if (personCount > 5) {
       densityLevel = "MEDIUM";
       densityColor = "#f97316"; // Orange
       densityDescription = "Moderate density - Watch for changes";
