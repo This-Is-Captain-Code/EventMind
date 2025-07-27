@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertCircle, CheckCircle, Clock, Camera, Play, Square, Settings, Zap, Activity, Eye, Cpu, Upload, Type, Image, Brain } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Camera, Play, Square, Settings, Zap, Activity, Eye, Cpu, Upload, Type, Image, Brain, Flame, CloudRain } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCamera } from '@/hooks/use-camera';
 import { BoundingBoxOverlay } from '@/components/BoundingBoxOverlay';
@@ -32,7 +32,9 @@ const AVAILABLE_MODELS = [
   { value: 'LOGO_DETECTION', label: 'Logo Detection', icon: Image, description: 'Identify brand logos and corporate symbols' },
   { value: 'OCCUPANCY_COUNTING', label: 'Occupancy Analytics', icon: Activity, description: 'Count people and analyze space utilization' },
   { value: 'PPE_DETECTION', label: 'PPE Detection', icon: Zap, description: 'Identify safety equipment and compliance' },
-  { value: 'PERSON_DETECTION', label: 'Person Detection', icon: Eye, description: 'Specialized person detection and tracking' }
+  { value: 'PERSON_DETECTION', label: 'Person Detection', icon: Eye, description: 'Specialized person detection and tracking' },
+  { value: 'FIRE_DETECTION', label: 'Fire Detection', icon: Flame, description: 'Detect flames and fire hazards with bounding boxes' },
+  { value: 'SMOKE_DETECTION', label: 'Smoke Detection', icon: CloudRain, description: 'Detect smoke and vapor patterns with bounding boxes' }
 ];
 
 const PROCESSING_MODELS = [
@@ -68,7 +70,7 @@ export default function VertexAIPlatform() {
   const [newAppModels, setNewAppModels] = useState<string[]>(['GENERAL_OBJECT_DETECTION']);
   
   // Frame processing settings
-  const [selectedModels, setSelectedModels] = useState<string[]>(['OBJECT_DETECTION', 'FACE_DETECTION']);
+  const [selectedModels, setSelectedModels] = useState<string[]>(['OBJECT_DETECTION', 'FACE_DETECTION', 'FIRE_DETECTION', 'SMOKE_DETECTION']);
   const [lastProcessingResult, setLastProcessingResult] = useState<any>(null);
   
   // New stream form

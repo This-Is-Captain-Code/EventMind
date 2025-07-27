@@ -32,6 +32,9 @@ export interface VisionAnalysis {
   detections: any[];
   applicationId: string;
   streamId: string;
+  safetyAnalysis?: any;
+  occupancyDensity?: any;
+  frameId?: string;
 }
 
 export interface StreamingEvent {
@@ -152,23 +155,32 @@ export class VertexAIVisionPlatformService {
       {
         name: `projects/${this.projectId}/locations/us-central1/applications/my-vision-app`,
         displayName: "My Vision App",
+        location: "us-central1",
         state: "DEPLOYED",
         createTime: new Date().toISOString(),
         updateTime: new Date().toISOString(),
+        models: ["GENERAL_OBJECT_DETECTION", "FACE_DETECTION", "FIRE_DETECTION", "SMOKE_DETECTION"],
+        streams: []
       },
       {
         name: `projects/${this.projectId}/locations/us-central1/applications/test-app-2`,
         displayName: "Test App 2",
+        location: "us-central1",
         state: "DEPLOYED",
         createTime: new Date().toISOString(),
         updateTime: new Date().toISOString(),
+        models: ["OCCUPANCY_COUNTING", "PPE_DETECTION"],
+        streams: []
       },
       {
         name: `projects/${this.projectId}/locations/us-central1/applications/production-vision`,
         displayName: "Production Vision",
+        location: "us-central1",
         state: "DEPLOYED",
         createTime: new Date().toISOString(),
         updateTime: new Date().toISOString(),
+        models: ["OBJECT_DETECTION", "PERSON_DETECTION", "FIRE_DETECTION", "SMOKE_DETECTION"],
+        streams: []
       },
     ];
   }
@@ -378,6 +390,16 @@ export class VertexAIVisionPlatformService {
           case "LOGO_DETECTION":
             const logoData = await this.runLogoDetection(imageBuffer);
             detections.push(...logoData);
+            break;
+
+          case "FIRE_DETECTION":
+            const fireData = await this.runFireDetection(imageBuffer);
+            detections.push(...fireData);
+            break;
+
+          case "SMOKE_DETECTION":
+            const smokeData = await this.runSmokeDetection(imageBuffer);
+            detections.push(...smokeData);
             break;
 
           default:
@@ -1215,5 +1237,203 @@ export class VertexAIVisionPlatformService {
    */
   getSafetyStats(): any {
     return this.safetyAnalyzer.getSafetyStats();
+  }
+
+  /**
+   * Fire detection using object detection to identify fire and flame objects
+   */
+  private async runFireDetection(imageBuffer: Buffer): Promise<any[]> {
+    try {
+      const headers = await this.getAuthHeaders();
+
+      // Use Google Cloud Vision API for object localization to detect fire-related objects
+      const request = {
+        requests: [
+          {
+            image: {
+              content: imageBuffer.toString("base64"),
+            },
+            features: [
+              {
+                type: "OBJECT_LOCALIZATION",
+                maxResults: 20,
+              },
+            ],
+          },
+        ],
+      };
+
+      const endpoint = "https://vision.googleapis.com/v1/images:annotate";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Fire detection API error: ${errorText}`);
+        return [];
+      }
+
+      const data = await response.json();
+      return this.parseFireDetections(data);
+    } catch (error) {
+      console.error("Fire detection error:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Smoke detection using object detection to identify smoke patterns
+   */
+  private async runSmokeDetection(imageBuffer: Buffer): Promise<any[]> {
+    try {
+      const headers = await this.getAuthHeaders();
+
+      // Use Google Cloud Vision API for object localization to detect smoke-related objects
+      const request = {
+        requests: [
+          {
+            image: {
+              content: imageBuffer.toString("base64"),
+            },
+            features: [
+              {
+                type: "OBJECT_LOCALIZATION",
+                maxResults: 20,
+              },
+            ],
+          },
+        ],
+      };
+
+      const endpoint = "https://vision.googleapis.com/v1/images:annotate";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Smoke detection API error: ${errorText}`);
+        return [];
+      }
+
+      const data = await response.json();
+      return this.parseSmokeDetections(data);
+    } catch (error) {
+      console.error("Smoke detection error:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Parse fire detection results from Google Cloud Vision API
+   */
+  private parseFireDetections(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+
+    const fireDetections: any[] = [];
+    
+    // Fire-related keywords to identify in object detection
+    const fireKeywords = [
+      "fire", "flame", "flames", "burning", "blaze", "bonfire",
+      "campfire", "fireplace", "torch", "candle", "lighter"
+    ];
+
+    data.responses.forEach((response: any) => {
+      if (response.localizedObjectAnnotations) {
+        response.localizedObjectAnnotations.forEach((obj: any) => {
+          const objectName = (obj.name || "").toLowerCase();
+          const isFire = fireKeywords.some(keyword => 
+            objectName.includes(keyword)
+          );
+
+          if (isFire && obj.score > 0.3) { // Lower threshold for fire detection
+            console.log(`🔥 Fire detected: ${obj.name} with confidence ${obj.score}`);
+            const vertices = obj.boundingPoly?.normalizedVertices || [];
+            
+            if (vertices.length >= 4) {
+              fireDetections.push({
+                type: "FIRE_DETECTION",
+                label: `🔥 Fire: ${obj.name} (${Math.round(obj.score * 100)}%)`,
+                confidence: obj.score,
+                bbox: {
+                  left: vertices[0].x || 0,
+                  top: vertices[0].y || 0,
+                  right: vertices[2].x || 0,
+                  bottom: vertices[2].y || 0,
+                },
+                alertLevel: obj.score > 0.7 ? "HIGH" : obj.score > 0.5 ? "MEDIUM" : "LOW",
+                detectedObject: obj.name,
+              });
+            }
+          }
+        });
+      }
+    });
+
+    // Log fire detection results
+    if (fireDetections.length > 0) {
+      console.log(`🚨 FIRE ALERT: Detected ${fireDetections.length} fire-related objects`);
+    }
+
+    return fireDetections;
+  }
+
+  /**
+   * Parse smoke detection results from Google Cloud Vision API
+   */
+  private parseSmokeDetections(data: any): any[] {
+    if (!data.responses || !Array.isArray(data.responses)) return [];
+
+    const smokeDetections: any[] = [];
+    
+    // Smoke-related keywords to identify in object detection
+    const smokeKeywords = [
+      "smoke", "smoking", "steam", "vapor", "mist", "fog",
+      "cigarette", "cigar", "pipe", "chimney"
+    ];
+
+    data.responses.forEach((response: any) => {
+      if (response.localizedObjectAnnotations) {
+        response.localizedObjectAnnotations.forEach((obj: any) => {
+          const objectName = (obj.name || "").toLowerCase();
+          const isSmoke = smokeKeywords.some(keyword => 
+            objectName.includes(keyword)
+          );
+
+          if (isSmoke && obj.score > 0.3) { // Lower threshold for smoke detection
+            console.log(`💨 Smoke detected: ${obj.name} with confidence ${obj.score}`);
+            const vertices = obj.boundingPoly?.normalizedVertices || [];
+            
+            if (vertices.length >= 4) {
+              smokeDetections.push({
+                type: "SMOKE_DETECTION",
+                label: `💨 Smoke: ${obj.name} (${Math.round(obj.score * 100)}%)`,
+                confidence: obj.score,
+                bbox: {
+                  left: vertices[0].x || 0,
+                  top: vertices[0].y || 0,
+                  right: vertices[2].x || 0,
+                  bottom: vertices[2].y || 0,
+                },
+                alertLevel: obj.score > 0.7 ? "HIGH" : obj.score > 0.5 ? "MEDIUM" : "LOW",
+                detectedObject: obj.name,
+              });
+            }
+          }
+        });
+      }
+    });
+
+    // Log smoke detection results
+    if (smokeDetections.length > 0) {
+      console.log(`🚨 SMOKE ALERT: Detected ${smokeDetections.length} smoke-related objects`);
+    }
+
+    return smokeDetections;
   }
 }

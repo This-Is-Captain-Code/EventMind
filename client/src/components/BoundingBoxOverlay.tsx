@@ -24,6 +24,8 @@ interface Detection {
   text?: string;
   logoName?: string;
   ppeType?: string;
+  alertLevel?: string;
+  detectedObject?: string;
   // Enhanced occupancy data properties
   count?: number;
   density?: string;
@@ -50,7 +52,9 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
       'PPE_DETECTION': 'border-yellow-500 bg-yellow-500/10',
       'PERSON_DETECTION': 'border-red-500 bg-red-500/10',
       'OCCUPANCY_COUNT': 'border-cyan-500 bg-cyan-500/10',
-      'LABEL_DETECTION': 'border-gray-500 bg-gray-500/10'
+      'LABEL_DETECTION': 'border-gray-500 bg-gray-500/10',
+      'FIRE_DETECTION': 'border-red-600 bg-red-600/20',
+      'SMOKE_DETECTION': 'border-gray-600 bg-gray-600/20'
     };
     return colors[type as keyof typeof colors] || 'border-gray-400 bg-gray-400/10';
   };
@@ -64,7 +68,9 @@ export function BoundingBoxOverlay({ detections, videoWidth, videoHeight, classN
       'PPE_DETECTION': 'bg-yellow-600',
       'PERSON_DETECTION': 'bg-red-600',
       'OCCUPANCY_COUNT': 'bg-cyan-600',
-      'LABEL_DETECTION': 'bg-gray-600'
+      'LABEL_DETECTION': 'bg-gray-600',
+      'FIRE_DETECTION': 'bg-red-700',
+      'SMOKE_DETECTION': 'bg-gray-700'
     };
     return colors[type as keyof typeof colors] || 'bg-gray-600';
   };
