@@ -109,6 +109,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes: Latest modifications with dates
 
+### July 27, 2025 - Fire & Smoke Detection + Comprehensive Documentation
+- **Added comprehensive README.md file** - Complete documentation covering all features, setup instructions, API endpoints, and troubleshooting
+- **Finalized fire and smoke detection** - Red bounding boxes for fire detection, gray bounding boxes for smoke detection with confidence scoring
+- **Fixed incident analysis functionality** - Properly configured Gemini AI integration with function calling for intelligent safety insights
+- **Enhanced model documentation** - Detailed breakdown of all Vision AI models and endpoints used in the platform
+- **Complete setup instructions** - Step-by-step guide for Google Cloud setup, API configuration, and deployment
+
 ### July 26, 2025 - RTMP Multi-Device Streaming Implementation & Enhanced Occupancy Density Display
 - **Implemented Advanced Safety Analyzer** - Multi-frame analysis system for density surge detection and falling/lying person detection
 - **Real-time person tracking** - Sophisticated tracking system that follows individuals across multiple frames using position correlation
