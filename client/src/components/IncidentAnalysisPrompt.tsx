@@ -36,15 +36,10 @@ export function IncidentAnalysisPrompt() {
 
     setLoading(true);
     try {
-      const response = await apiRequest('/api/incidents/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt: prompt.trim() })
-      });
+      const response = await apiRequest('POST', '/api/incidents/analyze', { prompt: prompt.trim() });
+      const result = await response.json();
 
-      setResult(response);
+      setResult(result);
       toast({
         title: "Analysis Complete",
         description: "AI has successfully analyzed the incident data",
